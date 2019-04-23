@@ -4,39 +4,26 @@
 
 """factory_boy extensions for use with the Django framework."""
 
-from __future__ import absolute_import
-from __future__ import unicode_literals
+from __future__ import absolute_import, unicode_literals
 
-import io
-import os
 import logging
-import functools
 
 try:
     import django
-    from django.core import files as django_files
     from django.db import IntegrityError
 except ImportError as e:  # pragma: no cover
     django = None
-    django_files = None
     import_failure = e
 
 
-from . import base
-from . import declarations
-from . import errors
-from .compat import is_string
+from .. import base
+from .. import errors
+from ..compat import is_string
 
 logger = logging.getLogger('factory.generate')
 
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
-
-
-def require_django():
-    """Simple helper to ensure Django is available."""
-    if django_files is None:  # pragma: no cover
-        raise import_failure
 
 
 _LAZY_LOADS = {}
@@ -190,159 +177,3 @@ class DjangoModelFactory(base.Factory):
         if create and results:
             # Some post-generation hooks ran, and may have modified us.
             instance.save()
-
-
-class FileField(declarations.ParameteredAttribute):
-    """Helper to fill in django.db.models.FileField from a Factory."""
-
-    DEFAULT_FILENAME = 'example.dat'
-
-    def __init__(self, **defaults):
-        require_django()
-        super(FileField, self).__init__(**defaults)
-
-    def _make_data(self, params):
-        """Create data for the field."""
-        return params.get('data', b'')
-
-    def _make_content(self, params):
-        path = ''
-
-        _content_params = [params.get('from_path'), params.get('from_file'), params.get('from_func')]
-        if len([p for p in _content_params if p]) > 1:
-            raise ValueError(
-                "At most one argument from 'from_file', 'from_path', and 'from_func' should "
-                "be non-empty when calling factory.django.FileField."
-            )
-
-        if params.get('from_path'):
-            path = params['from_path']
-            f = open(path, 'rb')
-            content = django_files.File(f, name=path)
-
-        elif params.get('from_file'):
-            f = params['from_file']
-            content = django_files.File(f)
-            path = content.name
-
-        elif params.get('from_func'):
-            func = params['from_func']
-            content = django_files.File(func())
-            path = content.name
-
-        else:
-            data = self._make_data(params)
-            content = django_files.base.ContentFile(data)
-
-        if path:
-            default_filename = os.path.basename(path)
-        else:
-            default_filename = self.DEFAULT_FILENAME
-
-        filename = params.get('filename', default_filename)
-        return filename, content
-
-    def generate(self, step, params):
-        """Fill in the field."""
-        # Recurse into a DictFactory: allows users to have some params depending
-        # on others.
-        params = step.recurse(base.DictFactory, params, force_sequence=step.sequence)
-        filename, content = self._make_content(params)
-        return django_files.File(content.file, filename)
-
-
-class ImageField(FileField):
-    DEFAULT_FILENAME = 'example.jpg'
-
-    def _make_data(self, params):
-        # ImageField (both django's and factory_boy's) require PIL.
-        # Try to import it along one of its known installation paths.
-        try:
-            from PIL import Image
-        except ImportError:
-            import Image
-
-        width = params.get('width', 100)
-        height = params.get('height', width)
-        color = params.get('color', 'blue')
-        image_format = params.get('format', 'JPEG')
-
-        thumb = Image.new('RGB', (width, height), color)
-        thumb_io = io.BytesIO()
-        thumb.save(thumb_io, format=image_format)
-        return thumb_io.getvalue()
-
-
-class mute_signals(object):
-    """Temporarily disables and then restores any django signals.
-
-    Args:
-        *signals (django.dispatch.dispatcher.Signal): any django signals
-
-    Examples:
-        with mute_signals(pre_init):
-            user = UserFactory.build()
-            ...
-
-        @mute_signals(pre_save, post_save)
-        class UserFactory(factory.Factory):
-            ...
-
-        @mute_signals(post_save)
-        def generate_users():
-            UserFactory.create_batch(10)
-    """
-
-    def __init__(self, *signals):
-        self.signals = signals
-        self.paused = {}
-
-    def __enter__(self):
-        for signal in self.signals:
-            logger.debug('mute_signals: Disabling signal handlers %r',
-                         signal.receivers)
-
-            # Note that we're using implementation details of
-            # django.signals, since arguments to signal.connect()
-            # are lost in signal.receivers
-            self.paused[signal] = signal.receivers
-            signal.receivers = []
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        for signal, receivers in self.paused.items():
-            logger.debug('mute_signals: Restoring signal handlers %r',
-                         receivers)
-
-            signal.receivers = receivers
-            with signal.lock:
-                # Django uses some caching for its signals.
-                # Since we're bypassing signal.connect and signal.disconnect,
-                # we have to keep messing with django's internals.
-                signal.sender_receivers_cache.clear()
-        self.paused = {}
-
-    def copy(self):
-        return mute_signals(*self.signals)
-
-    def __call__(self, callable_obj):
-        if isinstance(callable_obj, base.FactoryMetaClass):
-            # Retrieve __func__, the *actual* callable object.
-            generate_method = callable_obj._generate.__func__
-
-            @classmethod
-            @functools.wraps(generate_method)
-            def wrapped_generate(*args, **kwargs):
-                # A mute_signals() object is not reentrant; use a copy every time.
-                with self.copy():
-                    return generate_method(*args, **kwargs)
-
-            callable_obj._generate = wrapped_generate
-            return callable_obj
-
-        else:
-            @functools.wraps(callable_obj)
-            def wrapper(*args, **kwargs):
-                # A mute_signals() object is not reentrant; use a copy every time.
-                with self.copy():
-                    return callable_obj(*args, **kwargs)
-            return wrapper
