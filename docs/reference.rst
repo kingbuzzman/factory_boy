@@ -1752,8 +1752,13 @@ RelatedFactoryList
 
     .. attribute:: size
 
-        Either an ``int``, or a ``lambda`` that returns an ``int``, which will define the number 
+        Either an ``int``, or a ``lambda`` that returns an ``int``, which will define the number
         of related Factories to be generated for each parent object.
+
+   .. versionadded:: 2.12
+
+        Note that the API for :class:`RelatedFactoryList` is considered experimental, and might change
+        in a future version for increased consistency with other declarations.
 
 .. note::
           Note that using a ``lambda`` for :attr:`size` allows the number of related objects per
@@ -2101,6 +2106,7 @@ of :class:`random.Random`, which can be managed through the :mod:`factory.random
 .. method:: get_random_state()
 
     Call :meth:`get_random_state` to retrieve the random generator's current
+    state. This method synchronizes both Faker’s and `factory_boy`’s random
     state.
     The returned object is implementation-specific.
 

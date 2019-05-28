@@ -152,7 +152,8 @@ class ModelTests(django_test.TestCase):
         class UnsetModelFactory(factory.django.DjangoModelFactory):
             pass
 
-        self.assertRaises(factory.FactoryError, UnsetModelFactory.create)
+        with self.assertRaises(factory.FactoryError):
+            UnsetModelFactory.create()
 
     def test_cross_database(self):
         class OtherDBFactory(factory.django.DjangoModelFactory):
@@ -230,10 +231,8 @@ class DjangoGetOrCreateTests(django_test.TestCase):
 
     def test_multiple_get_or_create_fields_both_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
-        self.assertRaises(
-            ValueError,
-            lambda: WithMultipleGetOrCreateFieldsFactory(
-                slug=obj1.slug, text="alt"))
+        with self.assertRaises(ValueError):
+            WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug, text="alt")
 
 
 class DjangoPkForceTestCase(django_test.TestCase):
@@ -410,11 +409,18 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
         class PointedRelatedExtraFactory(PointedRelatedFactory):
             pointer__bar = 'extra_new_bar'
 
+        class PointedRelatedWithTraitFactory(PointedFactory):
+            class Params:
+                with_pointer = factory.Trait(
+                    pointer=factory.RelatedFactory(PointerFactory, 'pointed', bar='with_trait')
+                )
+
         cls.PointedFactory = PointedFactory
         cls.PointerFactory = PointerFactory
         cls.PointedRelatedFactory = PointedRelatedFactory
         cls.PointerExtraFactory = PointerExtraFactory
         cls.PointedRelatedExtraFactory = PointedRelatedExtraFactory
+        cls.PointedRelatedWithTraitFactory = PointedRelatedWithTraitFactory
 
     def test_create_pointed(self):
         pointed = self.PointedFactory()
@@ -460,6 +466,15 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
         self.assertEqual(pointed.foo, 'foo')
         self.assertEqual(pointed.pointer, models.PointerModel.objects.get())
         self.assertEqual(pointed.pointer.bar, 'extra_new_bar')
+
+    def test_create_pointed_related_with_trait(self):
+        pointed = self.PointedRelatedWithTraitFactory(
+            with_pointer=True
+        )
+        self.assertEqual(pointed, models.PointedModel.objects.get())
+        self.assertEqual(pointed.foo, 'foo')
+        self.assertEqual(pointed.pointer, models.PointerModel.objects.get())
+        self.assertEqual(pointed.pointer.bar, 'with_trait')
 
 
 class DjangoFileFieldTestCase(django_test.TestCase):
@@ -544,12 +559,11 @@ class DjangoFileFieldTestCase(django_test.TestCase):
         self.assertEqual('django/example.data', o.afile.name)
 
     def test_error_both_file_and_path(self):
-        self.assertRaises(
-            ValueError,
-            WithFileFactory.build,
-            afile__from_file='fakefile',
-            afile__from_path=testdata.TESTFILE_PATH,
-        )
+        with self.assertRaises(ValueError):
+            WithFileFactory.build(
+                afile__from_file='fakefile',
+                afile__from_path=testdata.TESTFILE_PATH,
+            )
 
     def test_override_filename_with_path(self):
         o = WithFileFactory.build(
@@ -754,12 +768,11 @@ class DjangoImageFieldTestCase(django_test.TestCase):
         self.assertEqual('django/example.jpeg', o.animage.name)
 
     def test_error_both_file_and_path(self):
-        self.assertRaises(
-            ValueError,
-            WithImageFactory.build,
-            animage__from_file='fakefile',
-            animage__from_path=testdata.TESTIMAGE_PATH,
-        )
+        with self.assertRaises(ValueError):
+            WithImageFactory.build(
+                animage__from_file='fakefile',
+                animage__from_path=testdata.TESTIMAGE_PATH,
+            )
 
     def test_override_filename_with_path(self):
         o = WithImageFactory.build(
@@ -927,6 +940,39 @@ class PreventSignalsTestCase(django_test.TestCase):
         self.assertFalse(self.handlers.post_save.called)
 
         self.assertSignalsReactivated()
+
+
+class PreventChainedSignalsTestCase(django_test.TestCase):
+
+    def setUp(self):
+        self.post_save_mock = mock.Mock(side_effect=Exception('BOOM!'))
+        signals.post_save.connect(self.post_save_mock, models.PointedModel)
+
+    def tearDown(self):
+        signals.post_save.disconnect(self.post_save_mock, models.PointedModel)
+
+    @factory.django.mute_signals(signals.post_save)
+    class WithSignalsDecoratedFactory(factory.django.DjangoModelFactory):
+        class Meta:
+            model = models.PointedModel
+
+    def test_class_decorator_with_muted_subfactory(self):
+        class UndecoratedFactory(factory.django.DjangoModelFactory):
+            class Meta:
+                model = models.PointerModel
+            pointed = factory.SubFactory(self.WithSignalsDecoratedFactory)
+
+        UndecoratedFactory()
+        self.post_save_mock.assert_not_called()
+
+    def test_class_decorator_with_muted_related_factory(self):
+        class UndecoratedFactory(factory.django.DjangoModelFactory):
+            class Meta:
+                model = models.PointerModel
+            pointed = factory.RelatedFactory(self.WithSignalsDecoratedFactory)
+
+        UndecoratedFactory()
+        self.post_save_mock.assert_not_called()
 
 
 class DjangoCustomManagerTestCase(django_test.TestCase):

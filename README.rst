@@ -80,7 +80,7 @@ Links
 * Package: https://pypi.org/project/factory_boy/
 * Mailing-list: `factoryboy@googlegroups.com <mailto:factoryboy@googlegroups.com>`_ | https://groups.google.com/forum/#!forum/factoryboy
 
-factory_boy supports Python 2.7, 3.4 to 3.7, as well as PyPy 2.7 and 5.8.
+factory_boy supports Python 2.7, 3.5 to 3.7, as well as PyPy 2.7 and 5.8.
 
 
 Download
@@ -347,6 +347,13 @@ This will yield messages similar to those (artificial indentation):
       LazyStub: Computed values, got tests.test_using.TestModel2Factory(two=<tests.test_using.TestModel object at 0x1e15410>)
     BaseFactory: Generating tests.test_using.TestModel2Factory(two=<tests.test_using.TestModel object at 0x1e15410>)
 
+Support Policy
+--------------
+
+- **Django**'s [supported
+  versions](https://www.djangoproject.com/download/#supported-versions).
+- **SQLAlchemy**: [latest version on PyPI](https://pypi.org/project/SQLAlchemy/).
+- **mongoengine**: [latest version on PyPI](https://pypi.org/project/mongoengine/).
 
 Contributing
 ------------

@@ -1331,6 +1331,21 @@ class TraitTestCase(unittest.TestCase):
             dict(one=None, two=None, three=None, four=None, five=None),
         )
 
+    def test_traits_override_params(self):
+        """Override a Params value in a trait"""
+        class TestObjectFactory(factory.Factory):
+            class Meta:
+                model = TestObject
+
+            one = factory.LazyAttribute(lambda o: o.zero + 1)
+
+            class Params:
+                zero = 0
+                plus_one = factory.Trait(zero=1)
+
+        obj = TestObjectFactory(plus_one=True)
+        self.assertEqual(obj.one, 2)
+
     def test_traits_override(self):
         """Override a trait in a subclass."""
         class TestObjectFactory(factory.Factory):
@@ -1877,7 +1892,8 @@ class SubFactoryTestCase(unittest.TestCase):
         self.assertEqual(1, obj.descendant.sample_int)
         self.assertEqual(1, obj.descendant.container_len)
 
-        self.assertRaises(TypeError, TestModelFactory.build)
+        with self.assertRaises(TypeError):
+            TestModelFactory.build()
 
     def test_function_container_attribute(self):
         class TestModel2(FakeModel):
@@ -1935,7 +1951,8 @@ class IteratorTestCase(unittest.TestCase):
 
         # Scope bleeding: j will end up in TestObjectFactory's scope.
 
-        self.assertRaises(TypeError, TestObjectFactory.build)
+        with self.assertRaises(TypeError):
+            TestObjectFactory.build()
 
     @utils.disable_warnings
     def test_iterator_list_comprehension_protected(self):
