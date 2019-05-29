@@ -224,15 +224,22 @@ class DjangoGetOrCreateTests(django_test.TestCase):
         self.assertEqual(2, len(set(objs)))
         self.assertEqual(2, models.MultifieldModel.objects.count())
 
-    def test_multiple_get_or_create_fields_one_defined(self):
+
+class MultipleGetOrCreateFieldsTest(django_test.TestCase):
+    def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
         self.assertEqual(obj1, obj2)
 
-    def test_multiple_get_or_create_fields_both_defined(self):
+    def test_both_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         with self.assertRaises(ValueError):
             WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug, text="alt")
+
+    def test_unique_field_not_in_get_or_create(self):
+        WithMultipleGetOrCreateFieldsFactory(title="Title")
+        with self.assertRaises(django.db.IntegrityError):
+            WithMultipleGetOrCreateFieldsFactory(title="Title")
 
 
 class DjangoPkForceTestCase(django_test.TestCase):
@@ -700,8 +707,8 @@ class DjangoImageFieldTestCase(django_test.TestCase):
         self.assertEqual(13, o.animage.height)
         self.assertEqual('django/example.jpg', o.animage.name)
 
-        i = Image.open(os.path.join(settings.MEDIA_ROOT, o.animage.name))
-        colors = i.getcolors()
+        with Image.open(os.path.join(settings.MEDIA_ROOT, o.animage.name)) as i:
+            colors = i.getcolors()
         # 169 pixels with rgb(254, 0, 0)
         self.assertEqual([(169, (254, 0, 0))], colors)
         self.assertEqual('JPEG', i.format)
@@ -715,8 +722,8 @@ class DjangoImageFieldTestCase(django_test.TestCase):
         self.assertEqual(13, o.animage.height)
         self.assertEqual('django/example.jpg', o.animage.name)
 
-        i = Image.open(os.path.join(settings.MEDIA_ROOT, o.animage.name))
-        colors = i.convert('RGB').getcolors()
+        with Image.open(os.path.join(settings.MEDIA_ROOT, o.animage.name)) as i:
+            colors = i.convert('RGB').getcolors()
         # 169 pixels with rgb(0, 0, 255)
         self.assertEqual([(169, (0, 0, 255))], colors)
         self.assertEqual('GIF', i.format)
@@ -791,9 +798,10 @@ class DjangoImageFieldTestCase(django_test.TestCase):
         o1 = WithImageFactory.build(animage__from_path=testdata.TESTIMAGE_PATH)
         o1.save()
 
-        o2 = WithImageFactory.build(animage__from_file=o1.animage)
-        self.assertIsNone(o2.pk)
-        o2.save()
+        with o1.animage as f:
+            o2 = WithImageFactory.build(animage__from_file=f)
+            self.assertIsNone(o2.pk)
+            o2.save()
 
         with o2.animage as f:
             # Image file for a 42x42 green jpeg: 301 bytes long.
