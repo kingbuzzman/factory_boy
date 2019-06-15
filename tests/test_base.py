@@ -3,10 +3,7 @@
 
 import unittest
 
-from factory import base
-from factory import declarations
-from factory import enums
-from factory import errors
+from factory import base, declarations, enums, errors
 
 
 class TestObject(object):
@@ -542,7 +539,3 @@ class PostGenerationParsingTestCase(unittest.TestCase):
 
         self.assertIn('foo', TestObjectFactory._meta.post_declarations.as_dict())
         self.assertIn('foo__bar', TestObjectFactory._meta.post_declarations.as_dict())
-
-
-if __name__ == '__main__':  # pragma: no cover
-    unittest.main()

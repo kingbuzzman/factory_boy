@@ -3,13 +3,12 @@
 
 """Tests for factory_boy/MongoEngine interactions."""
 
-import unittest
-
-import factory
 import os
+import unittest
 
 import mongoengine
 
+import factory
 from factory.mongoengine import MongoEngineFactory
 
 
@@ -64,9 +63,6 @@ class MongoEngineTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.db.drop_database(cls.db_name)
-
-    def setUp(self):
-        mongoengine.connect('factory_boy_test')
 
     def test_build(self):
         std = PersonFactory.build()

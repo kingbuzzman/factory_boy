@@ -7,6 +7,7 @@ SETUP_PY=setup.py
 # Use current python binary instead of system default.
 COVERAGE = python $(shell which coverage)
 FLAKE8 = flake8
+ISORT = isort
 
 
 all: default
@@ -38,7 +39,7 @@ release:
 	fullrelease
 
 
-.PHONY: clean update release-patch release-minor release-major
+.PHONY: clean update release
 
 
 # Tests and quality
@@ -73,8 +74,9 @@ example-test:
 # Note: we run the linter in two runs, because our __init__.py files has specific warnings we want to exclude
 # DOC: Perform code quality tasks
 lint:
-	$(FLAKE8) --config .flake8 --exclude $(PACKAGE)/__init__.py $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
+	$(FLAKE8) --config .flake8 --exclude $(PACKAGE)/__init__.py $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
 	$(FLAKE8) --config .flake8 --ignore F401 $(PACKAGE)/__init__.py
+	$(ISORT) --recursive --check-only --diff $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
 	check-manifest
 
 coverage:

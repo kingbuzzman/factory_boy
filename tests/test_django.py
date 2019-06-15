@@ -8,20 +8,20 @@ import os
 import unittest
 
 import django
+from django import test as django_test
+from django.conf import settings
+from django.db.models import signals
+from django.test import utils as django_test_utils
+from django.test.runner import DiscoverRunner as DjangoTestSuiteRunner
 
-# Setup Django as soon as possible
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
-django.setup()
+import factory
 
-from django import test as django_test  # noqa: E402
-from django.conf import settings  # noqa: E402
-from django.test.runner import DiscoverRunner as DjangoTestSuiteRunner  # noqa: E402
-from django.test import utils as django_test_utils  # noqa: E402
-from django.db.models import signals  # noqa: E402
-from .djapp import models  # noqa: E402
+from . import testdata
+from .compat import mock
+
 try:
     from PIL import Image
-except ImportError:  # pragma: no cover
+except ImportError:
     # Try PIL alternate name
     try:
         import Image
@@ -29,11 +29,11 @@ except ImportError:  # pragma: no cover
         # OK, not installed
         Image = None
 
-import factory  # noqa: E402
+# Setup Django before importing Django models.
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
+django.setup()
 
-from . import testdata  # noqa: E402
-from .compat import mock  # noqa: E402
-
+from .djapp import models  # noqa:E402 isort:skip
 
 test_state = {}
 
@@ -233,7 +233,7 @@ class MultipleGetOrCreateFieldsTest(django_test.TestCase):
 
     def test_both_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(django.db.IntegrityError):
             WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug, text="alt")
 
     def test_unique_field_not_in_get_or_create(self):
@@ -997,7 +997,3 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         # Our CustomManager will remove the 'arg=' argument,
         # invalid for the actual model.
         ObjFactory.create(arg='invalid')
-
-
-if __name__ == '__main__':  # pragma: no cover
-    unittest.main()

@@ -13,8 +13,8 @@ import unittest
 import factory
 from factory import errors
 
-from .compat import is_python2
 from . import utils
+from .compat import is_python2
 
 
 class TestObject(object):
@@ -2967,7 +2967,3 @@ class ListTestCase(unittest.TestCase):
                 1,
             ],
         ], o.two)
-
-
-if __name__ == '__main__':  # pragma: no cover
-    unittest.main()

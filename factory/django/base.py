@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
+
+"""factory_boy extensions for use with the Django framework."""
+
 from __future__ import absolute_import, unicode_literals
 
 import logging
@@ -12,9 +15,7 @@ except ImportError as e:  # pragma: no cover
     django = None
     import_failure = e
 
-
-from .. import base
-from .. import errors
+from .. import base, errors
 from ..compat import is_string
 
 logger = logging.getLogger('factory.generate')
@@ -156,12 +157,9 @@ class DjangoModelFactory(base.Factory):
                 try:
                     instance = manager.get(**get_or_create_params)
                 except manager.model.DoesNotExist:
-                    raise ValueError(
-                        "django_get_or_create - Unable to create a new object "
-                        "due an IntegrityError raised based on "
-                        "your model's uniqueness constraints. "
-                        "DoesNotExist: Unable to find an existing object based on "
-                        "the fields specified in your factory instance.")
+                    # Original params are not a valid lookup and triggered a create(),
+                    # that resulted in an IntegrityError. Follow Django’s behavior.
+                    raise e
             else:
                 raise e
 

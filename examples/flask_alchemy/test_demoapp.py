@@ -1,9 +1,8 @@
-import os
 import unittest
-import tempfile
 
 import demoapp
 import demoapp_factories
+
 
 class DemoAppTestCase(unittest.TestCase):
 
@@ -30,6 +29,3 @@ class DemoAppTestCase(unittest.TestCase):
         self.assertIsNotNone(userlog.user.id)
         self.assertEqual(1, len(demoapp.User.query.all()))
         self.assertEqual(1, len(demoapp.UserLog.query.all()))
-
-if __name__ == '__main__':
-    unittest.main()
