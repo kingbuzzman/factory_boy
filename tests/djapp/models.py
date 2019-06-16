@@ -124,3 +124,14 @@ class AbstractWithCustomManager(models.Model):
 
 class FromAbstractWithCustomManager(AbstractWithCustomManager):
     pass
+
+
+class Person(models.Model):
+    name = models.CharField(max_length=20)
+    age = models.IntegerField(null=True)
+    dob = models.DateField(null=True)
+    registered_date = models.DateField()
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+    mother = models.ForeignKey('djapp.Person', null=True, related_name='-')
+    father = models.ForeignKey('djapp.Person', null=True, related_name='-')

@@ -7,8 +7,8 @@
 from __future__ import absolute_import, unicode_literals
 
 import io
-import os
 import logging
+import os
 
 try:
     from django.core import files as django_files
@@ -16,8 +16,7 @@ except ImportError as e:  # pragma: no cover
     django_files = None
     import_failure = e
 
-from .. import base
-from .. import declarations
+from .. import base, declarations
 
 logger = logging.getLogger('factory.generate')
 

@@ -6,8 +6,10 @@
 
 from __future__ import absolute_import, unicode_literals
 
-import logging
+import contextlib
 import functools
+import logging
+from collections import defaultdict
 
 from .. import base
 
@@ -88,3 +90,31 @@ class mute_signals(object):
             with self.copy():
                 return method(*args, **kwargs)
         return wrapped_method
+
+
+@contextlib.contextmanager
+def suppress_autotime(model, fields):
+    """
+    Disable auto_now during a "with" block.
+
+    This function is NOT thread-safe because it changes the model itself temporarily.
+    This is ok because we're in a test and all tests run in one thread.
+    """
+    # Disable auto_now & auto_now_add for every field in this model that has them,
+    # saving the original values first.
+    original_values = defaultdict(dict)
+    for field in (f for f in model._meta.local_fields if f.name in fields):
+        if hasattr(field, 'auto_now'):
+            original_values[field]['auto_now'] = field.auto_now
+            field.auto_now = False
+        if hasattr(field, 'auto_now_add'):
+            original_values[field]['auto_now_add'] = field.auto_now_add
+            field.auto_now_add = False
+
+    try:
+        yield  # Execute the logic in the "with" block.
+    finally:
+        # After the "with" block, put original values back.
+        for field, attrs in original_values.items():
+            for attr, value in attrs.items():
+                setattr(field, attr, value)

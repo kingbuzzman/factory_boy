@@ -47,7 +47,7 @@ setup(
         'setuptools>=0.8',
     ],
     tests_require=[
-        # 'mock',
+        'freezegun'
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",

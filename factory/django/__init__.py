@@ -8,6 +8,8 @@ from __future__ import absolute_import, unicode_literals
 
 from .base import DjangoModelFactory
 from .declarations import FileField, ImageField
+from .helpers import factory_maker
 from .utils import mute_signals
 
-__all__ = ('DjangoModelFactory', 'FileField', 'ImageField', 'mute_signals',)
+__all__ = ('DjangoModelFactory', 'FileField', 'ImageField', 'mute_signals',
+           'factory_maker')

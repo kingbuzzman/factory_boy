@@ -4,6 +4,7 @@
 """Tests for factory_boy/Django interactions."""
 
 import io
+import datetime
 import os
 import unittest
 
@@ -13,6 +14,7 @@ from django.conf import settings
 from django.db.models import signals
 from django.test import utils as django_test_utils
 from django.test.runner import DiscoverRunner as DjangoTestSuiteRunner
+from freezegun import freeze_time
 
 import factory
 
@@ -997,3 +999,48 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         # Our CustomManager will remove the 'arg=' argument,
         # invalid for the actual model.
         ObjFactory.create(arg='invalid')
+
+
+class DjangoAutoFactoryTestCase(django_test.TestCase):
+
+    def test_create_simple_factory(self):
+        factory_cls = factory.django.factory_maker(models.StandardModel)
+        self.assertEqual(factory_cls.__name__, 'StandardModelFactory')
+
+        # Default model gets created with defaults
+        instance = factory_cls()
+        self.assertEqual(instance.foo, '')
+        self.assertTrue(isinstance(instance.id, int))
+
+        # We can override any field we want
+        instance = factory_cls(foo='test')
+        self.assertEqual(instance.foo, 'test')
+        self.assertTrue(isinstance(instance.id, int))
+
+    @freeze_time('2000-01-01T00:00:00Z', tick=False)
+    def test_create_person_factory(self):
+        factory_cls = factory.django.factory_maker(models.Person)
+        self.assertEqual(factory_cls.__name__, 'PersonFactory')
+
+        # Default model gets created with defaults
+        mother = factory_cls(name='female')
+        self.assertEqual(mother.name, 'female')
+        self.assertEqual(mother.mother, None)
+        self.assertEqual(mother.father, None)
+        father = factory_cls(name='male')
+        self.assertEqual(father.name, 'male')
+        self.assertEqual(father.mother, None)
+        self.assertEqual(father.father, None)
+        child1 = factory_cls(name='child', mother=mother, father=father)
+        self.assertEqual(child1.mother, mother)
+        self.assertEqual(child1.father, father)
+        self.assertEqual(child1.date_created, datetime.datetime(2000, 1, 1))
+        self.assertEqual(child1.date_modified, datetime.datetime(2000, 1, 1))
+        # Note: We can change the date_created and date_modified
+        child2 = factory_cls(name='child2', mother=mother, father=father,
+                             date_created=datetime.datetime(1999, 12, 30),
+                             date_modified=datetime.datetime(1999, 12, 31))
+        self.assertEqual(child2.mother, mother)
+        self.assertEqual(child2.father, father)
+        self.assertEqual(child2.date_created, datetime.datetime(1999, 12, 30))
+        self.assertEqual(child2.date_modified, datetime.datetime(1999, 12, 31))

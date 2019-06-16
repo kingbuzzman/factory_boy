@@ -3,6 +3,7 @@
 *.pyc
 *.pyo
 .idea/
+.eggs/
 
 # Build-related files
 docs/_build/
