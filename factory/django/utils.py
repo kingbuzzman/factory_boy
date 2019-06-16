@@ -9,14 +9,6 @@ from __future__ import absolute_import, unicode_literals
 import logging
 import functools
 
-try:
-    import django
-    from django.core import files as django_files
-except ImportError as e:  # pragma: no cover
-    django = None
-    django_files = None
-    import_failure = e
-
 from .. import base
 
 logger = logging.getLogger('factory.generate')
