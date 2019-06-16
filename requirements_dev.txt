@@ -12,3 +12,4 @@ mongoengine
 wheel
 tox
 zest.releaser[recommended]
+freezegun

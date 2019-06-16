@@ -9,14 +9,13 @@ from __future__ import absolute_import, unicode_literals
 import datetime
 import logging
 
-from functools import lru_cache
-
-import pytz
 # from django.contrib.contenttypes.fields import GenericForeignKey
 # from django.contrib.postgres.fields import ArrayField, HStoreField
 # from django.contrib.postgres.fields.jsonb import JSONField
 # from django.contrib.postgres.search import SearchVectorField
 from django.db.models import fields
+
+import pytz
 
 from ..declarations import SubFactory, _FactoryWrapper
 from .base import DjangoModelFactory
@@ -129,7 +128,6 @@ factory_field_by_django_field_type = {
 }
 
 
-@lru_cache()
 def factory_maker(model, factory_name=None, options=None, field_lookups=None):
     """
     Dynamically creates a class that inherits from DjangoModelFactory. Defines
@@ -183,7 +181,7 @@ def factory_maker(model, factory_name=None, options=None, field_lookups=None):
                 break
 
         if FieldType is None:
-            raise KeyError(f'Field {field.__class__} not found')
+            raise KeyError('Field %s was not found, please add it' % (field.__class__,))
         elif FieldType == Skip:
             continue
 

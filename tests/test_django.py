@@ -3,8 +3,8 @@
 
 """Tests for factory_boy/Django interactions."""
 
-import io
 import datetime
+import io
 import os
 import unittest
 
@@ -14,9 +14,9 @@ from django.conf import settings
 from django.db.models import signals
 from django.test import utils as django_test_utils
 from django.test.runner import DiscoverRunner as DjangoTestSuiteRunner
-from freezegun import freeze_time
 
 import factory
+from freezegun import freeze_time
 
 from . import testdata
 from .compat import mock

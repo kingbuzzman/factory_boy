@@ -8,6 +8,9 @@ from __future__ import absolute_import, unicode_literals
 
 import logging
 
+from .. import base, errors
+from ..compat import is_string
+
 try:
     import django
     from django.db import IntegrityError
@@ -15,8 +18,6 @@ except ImportError as e:  # pragma: no cover
     django = None
     import_failure = e
 
-from .. import base, errors
-from ..compat import is_string
 
 logger = logging.getLogger('factory.generate')
 

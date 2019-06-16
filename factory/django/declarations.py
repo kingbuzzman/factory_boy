@@ -10,13 +10,14 @@ import io
 import logging
 import os
 
+from .. import base, declarations
+
 try:
     from django.core import files as django_files
 except ImportError as e:  # pragma: no cover
     django_files = None
     import_failure = e
 
-from .. import base, declarations
 
 logger = logging.getLogger('factory.generate')
 
