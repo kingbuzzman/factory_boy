@@ -107,3 +107,32 @@ class ImageField(FileField):
         with Image.new('RGB', (width, height), color) as thumb:
             thumb.save(thumb_io, format=image_format)
         return thumb_io.getvalue()
+
+
+class LazySubFactory(declarations.SubFactory):
+    def __init__(self, constructor, params=None, kparams=None, **kwargs):
+        self.constructor = constructor
+        self.params = params
+        self.kparams = kparams
+        # Skip parent __init__ and do what the class's grandparent __init__ does
+        self.defaults = kwargs
+
+    def get_factory(self):
+        factory_cls = self.constructor(*self.params, **(self.kparams or {}))
+        return declarations._FactoryWrapper(factory_cls).get()
+
+
+class NullableSubFactory(LazySubFactory):
+    def generate(self, step, params):
+        # "params" normally looks like this: {'__containers': (<LazyStub for .CourseFactory>,)}
+        # We first need to build a dictionary with no value, the reason we build a dictionary and not a list or set
+        # is because we can easily pop values using a key, using the latter we would have to do a comprehension as
+        # iterate over the object in its entirety
+        _params = dict(zip(params.keys(), [None] * len(params.keys())))
+        _params.pop('__containers', None)
+
+        # If this is a nullable object and we're not trying to populate it, make it null
+        if not _params:
+            return None
+
+        return super(NullableSubFactory, self).generate(step, params)

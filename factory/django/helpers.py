@@ -13,74 +13,22 @@ import logging
 # from django.contrib.postgres.fields import ArrayField, HStoreField
 # from django.contrib.postgres.fields.jsonb import JSONField
 # from django.contrib.postgres.search import SearchVectorField
-from django.db.models import fields
+try:
+    from django.db.models import fields
+except ImportError:
+    fields = object()
+
+def get_generics():
+    from django.contrib.contenttypes.fields import GenericForeignKey
+    return GenericForeignKey
 
 import pytz
 
-from ..declarations import SubFactory, _FactoryWrapper
+from .declarations import LazySubFactory, NullableSubFactory
 from .base import DjangoModelFactory
 from .utils import suppress_autotime
 
 logger = logging.getLogger('factory.generate')
-
-
-class Skip:
-    """
-    Placeholder used to indicate that a certain field in a model needs to be
-    skipped and not be wired into a Factory.
-
-    Example:
-        fields.reverse_related.ManyToManyRel: Skip
-    """
-    pass
-
-
-def nullable_factory(field, factory_maker_func=None, unique=None):
-    factory_maker_func = factory_maker_func or factory_maker
-    sub_factory_klass = NullableSubFactory if field.null else LazySubFactory
-    return sub_factory_klass(factory_maker_func, params=(field.related_model,))
-
-
-class LazySubFactory(SubFactory):
-    def __init__(self, constructor, params=None, kparams=None, **kwargs):
-        self.constructor = constructor
-        self.params = params
-        self.kparams = kparams
-        # Skip parent __init__ and do what the class's grandparent __init__ does
-        self.defaults = kwargs
-
-    def get_factory(self):
-        factory_cls = self.constructor(*self.params, **(self.kparams or {}))
-        return _FactoryWrapper(factory_cls).get()
-
-
-class NullableSubFactory(LazySubFactory):
-    def generate(self, step, params):
-        # "params" normally looks like this: {'__containers': (<LazyStub for .CourseFactory>,)}
-        # We first need to build a dictionary with no value, the reason we build a dictionary and not a list or set
-        # is because we can easily pop values using a key, using the latter we would have to do a comprehension as
-        # iterate over the object in its entirety
-        _params = dict(zip(params.keys(), [None] * len(params.keys())))
-        _params.pop('__containers', None)
-
-        # If this is a nullable object and we're not trying to populate it, make it null
-        if not _params:
-            return None
-
-        return super(NullableSubFactory, self).generate(step, params)
-
-
-def field_value(field, default, unique=False):
-    """Get the simplest possible value for this field."""
-    # Nullable fields get null.
-    if field.null:
-        return None
-    # Non-nullable character fields that can be blank get an empty string.
-    elif isinstance(field, fields.CharField) and field.blank:
-        return ''
-    # Except for special cases above, use the default value for this field.
-    else:
-        return default
 
 
 factory_field_by_django_field_type = {
@@ -128,7 +76,37 @@ factory_field_by_django_field_type = {
 }
 
 
-def factory_maker(model, factory_name=None, options=None, field_lookups=None):
+class Skip:
+    """
+    Placeholder used to indicate that a certain field in a model needs to be
+    skipped and not be wired into a Factory.
+
+    Example:
+        fields.reverse_related.ManyToManyRel: Skip
+    """
+    pass
+
+
+def nullable_factory(field, factory_maker_func=None, unique=None):
+    factory_maker_func = factory_maker_func or factory_maker
+    sub_factory_klass = NullableSubFactory if field.null else LazySubFactory
+    return sub_factory_klass(factory_maker_func, params=(field.related_model,))
+
+
+def field_value(field, default, unique=False):
+    """Get the simplest possible value for this field."""
+    # Nullable fields get null.
+    if field.null:
+        return None
+    # Non-nullable character fields that can be blank get an empty string.
+    elif isinstance(field, fields.CharField) and field.blank:
+        return ''
+    # Except for special cases above, use the default value for this field.
+    else:
+        return default
+
+
+def factory_maker(model, factory_name=None, options=None, field_lookups=None, **kwargs):
     """
     Dynamically creates a class that inherits from DjangoModelFactory. Defines
     methods and then assigns them to a class created on the fly. The class created
@@ -150,7 +128,7 @@ def factory_maker(model, factory_name=None, options=None, field_lookups=None):
     factory_name = str(factory_name or model.__name__ + 'Factory')
     options = options or {'model': model}
 
-    logger.debug('Creating factory %s' % (factory_name))
+    logger.debug('Creating factory %s' % (factory_name,))
 
     # Builds the Meta class of the Factory
     class Meta:
@@ -166,12 +144,17 @@ def factory_maker(model, factory_name=None, options=None, field_lookups=None):
 
     # Now build the class itself. Specify its fields, Meta, methods, etc.
     # First implement the Meta inner class, the module, and the two methods defined above.
-    attrs = {'Meta': Meta, '__module__': '', 'create': classmethod(create)}
+    if '__module__' not in kwargs:
+        kwargs['__module__'] = ''
+    if 'Meta' not in kwargs:
+        kwargs['Meta'] = Meta
+    if 'create' not in kwargs:
+        kwargs['create'] = classmethod(create)
 
     # Next, define the fields of the model this factory creates.
     for field in model._meta.get_fields():
         if field.name in ('id'):
-            attrs[field.name] = None
+            kwargs[field.name] = None
             continue
 
         FieldType = None
@@ -181,17 +164,17 @@ def factory_maker(model, factory_name=None, options=None, field_lookups=None):
                 break
 
         if FieldType is None:
-            raise KeyError('Field %s was not found, please add it' % (field.__class__,))
+            raise KeyError('Field %s was not found, please register it' % (field.__class__,))
         elif FieldType == Skip:
             continue
 
-        attrs[field.name] = FieldType(field)
+        kwargs[field.name] = FieldType(field)
 
     # Create a class of name `factory_name` inheriting from `DjangoModelFactory`
     # with the attributes of `attr`, essentially creating something like this:
     #
     # > class `str(factory_name)`(DjangoModelFactory):
-    # >     **attrs
-    Factory = type(str(factory_name), (DjangoModelFactory,), attrs)
+    # >     **kwargs
+    Factory = type(str(factory_name), (DjangoModelFactory,), kwargs)
 
     return Factory
