@@ -6,8 +6,7 @@ Fuzzy attributes
 .. note:: Now that FactoryBoy includes the :class:`factory.Faker` class, most of
           these built-in fuzzers are deprecated in favor of their
           `Faker <https://faker.readthedocs.io/>`_ equivalents. Further
-          discussion here:
-          `<https://github.com/FactoryBoy/factory_boy/issues/271/>`_
+          discussion in :issue:`271`.
 
 Some tests may be interested in testing with fuzzy, random values.
 
@@ -39,7 +38,7 @@ FuzzyText
 .. class:: FuzzyText(length=12, chars=string.ascii_letters, prefix='')
 
     The :class:`FuzzyText` fuzzer yields random strings beginning with
-    the given :attr:`prefix`, followed by :attr:`length` charactes chosen
+    the given :attr:`prefix`, followed by :attr:`length` characters chosen
     from the :attr:`chars` character set,
     and ending with the given :attr:`suffix`.
 

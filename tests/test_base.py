@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 import unittest
@@ -6,7 +5,7 @@ import unittest
 from factory import base, declarations, enums, errors
 
 
-class TestObject(object):
+class TestObject:
     def __init__(self, one=None, two=None, three=None, four=None):
         self.one = one
         self.two = two
@@ -14,7 +13,7 @@ class TestObject(object):
         self.four = four
 
 
-class FakeDjangoModel(object):
+class FakeDjangoModel:
     @classmethod
     def create(cls, **kwargs):
         instance = cls(**kwargs)
@@ -206,6 +205,16 @@ class OptionsTests(unittest.TestCase):
             OtherFactory._meta.post_declarations.as_dict(),
         )
 
+    def test_factory_as_meta_model_raises_exception(self):
+        class FirstFactory(base.Factory):
+            pass
+
+        class Meta:
+            model = FirstFactory
+
+        with self.assertRaises(TypeError):
+            type("SecondFactory", (base.Factory,), {"Meta": Meta})
+
 
 class DeclarationParsingTests(unittest.TestCase):
     def test_classmethod(self):
@@ -269,13 +278,13 @@ class FactoryTestCase(unittest.TestCase):
         sub = TestSubFactory.build()
         alt_parent = TestObjectFactory.build()
         alt_sub = TestSubFactory.build()
-        ones = set([x.one for x in (parent, alt_parent, sub, alt_sub)])
+        ones = {x.one for x in (parent, alt_parent, sub, alt_sub)}
         self.assertEqual(4, len(ones))
 
 
 class FactorySequenceTestCase(unittest.TestCase):
     def setUp(self):
-        super(FactorySequenceTestCase, self).setUp()
+        super().setUp()
 
         class TestObjectFactory(base.Factory):
             class Meta:
@@ -353,18 +362,11 @@ class FactorySequenceTestCase(unittest.TestCase):
 
 
 class FactoryDefaultStrategyTestCase(unittest.TestCase):
-    def setUp(self):
-        self.default_strategy = base.Factory._meta.strategy
-
-    def tearDown(self):
-        base.Factory._meta.strategy = self.default_strategy
-
     def test_build_strategy(self):
-        base.Factory._meta.strategy = enums.BUILD_STRATEGY
-
         class TestModelFactory(base.Factory):
             class Meta:
                 model = TestModel
+                strategy = enums.BUILD_STRATEGY
 
             one = 'one'
 
@@ -386,11 +388,10 @@ class FactoryDefaultStrategyTestCase(unittest.TestCase):
         self.assertTrue(test_model.id)
 
     def test_stub_strategy(self):
-        base.Factory._meta.strategy = enums.STUB_STRATEGY
-
         class TestModelFactory(base.Factory):
             class Meta:
                 model = TestModel
+                strategy = enums.STUB_STRATEGY
 
             one = 'one'
 
@@ -399,11 +400,10 @@ class FactoryDefaultStrategyTestCase(unittest.TestCase):
         self.assertFalse(hasattr(test_model, 'id'))  # We should have a plain old object
 
     def test_unknown_strategy(self):
-        base.Factory._meta.strategy = 'unknown'
-
         class TestModelFactory(base.Factory):
             class Meta:
                 model = TestModel
+                strategy = 'unknown'
 
             one = 'one'
 
@@ -414,10 +414,9 @@ class FactoryDefaultStrategyTestCase(unittest.TestCase):
         class TestModelFactory(base.StubFactory):
             class Meta:
                 model = TestModel
+                strategy = enums.CREATE_STRATEGY
 
             one = 'one'
-
-        TestModelFactory._meta.strategy = enums.CREATE_STRATEGY
 
         with self.assertRaises(base.StubFactory.UnsupportedStrategy):
             TestModelFactory()
@@ -426,20 +425,20 @@ class FactoryDefaultStrategyTestCase(unittest.TestCase):
         class TestModelFactory(base.StubFactory):
             class Meta:
                 model = TestModel
+                strategy = enums.BUILD_STRATEGY
 
             one = 'one'
 
-        TestModelFactory._meta.strategy = enums.BUILD_STRATEGY
         obj = TestModelFactory()
 
         # For stubs, build() is an alias of stub().
         self.assertFalse(isinstance(obj, TestModel))
 
     def test_change_strategy(self):
-        @base.use_strategy(enums.CREATE_STRATEGY)
         class TestModelFactory(base.StubFactory):
             class Meta:
                 model = TestModel
+                strategy = enums.CREATE_STRATEGY
 
             one = 'one'
 
@@ -497,7 +496,7 @@ class FactoryCreationTestCase(unittest.TestCase):
             @classmethod
             def _generate(cls, create, attrs):
                 attrs['four'] = 4
-                return super(TestModelFactory, cls)._generate(create, attrs)
+                return super()._generate(create, attrs)
 
         b = TestModelFactory.build(one=1)
         self.assertEqual(1, b.one)

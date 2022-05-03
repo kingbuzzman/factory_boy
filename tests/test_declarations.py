@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 import datetime
 import unittest
+from unittest import mock
 
 from factory import base, declarations, errors, helpers
 
 from . import utils
-from .compat import mock
 
 
 class OrderedDeclarationTestCase(unittest.TestCase):
@@ -17,7 +16,7 @@ class OrderedDeclarationTestCase(unittest.TestCase):
 
 
 class DigTestCase(unittest.TestCase):
-    class MyObj(object):
+    class MyObj:
         def __init__(self, n):
             self.n = n
 
@@ -41,6 +40,14 @@ class DigTestCase(unittest.TestCase):
         self.assertEqual(4, declarations.deepgetattr(obj, 'a.b.c').n)
         self.assertEqual(4, declarations.deepgetattr(obj, 'a.b.c.n'))
         self.assertEqual(42, declarations.deepgetattr(obj, 'a.b.c.n.x', 42))
+
+
+class MaybeTestCase(unittest.TestCase):
+    def test_init(self):
+        declarations.Maybe('foo', 1, 2)
+
+        with self.assertRaisesRegex(TypeError, 'Inconsistent phases'):
+            declarations.Maybe('foo', declarations.LazyAttribute(None), declarations.PostGenerationDeclaration())
 
 
 class SelfAttributeTestCase(unittest.TestCase):
@@ -123,6 +130,12 @@ class IteratorTestCase(unittest.TestCase):
         self.assertEqual(3, utils.evaluate_declaration(it, force_sequence=1))
         self.assertEqual(2, utils.evaluate_declaration(it, force_sequence=2))
         self.assertEqual(3, utils.evaluate_declaration(it, force_sequence=3))
+
+
+class TransformerTestCase(unittest.TestCase):
+    def test_transform(self):
+        t = declarations.Transformer(lambda x: x.upper(), 'foo')
+        self.assertEqual("FOO", utils.evaluate_declaration(t))
 
 
 class PostGenerationDeclarationTestCase(unittest.TestCase):

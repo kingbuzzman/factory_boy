@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 """Tests for factory_boy/SQLAlchemy interactions."""
 
 import unittest
-import warnings
+from unittest import mock
+
+import sqlalchemy
 
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
 
 from .alchemyapp import models
-from .compat import mock
 
 
 class StandardFactory(SQLAlchemyModelFactory):
@@ -38,10 +38,43 @@ class NoSessionFactory(SQLAlchemyModelFactory):
     id = factory.Sequence(lambda n: n)
 
 
-class SQLAlchemyPkSequenceTestCase(unittest.TestCase):
+class MultifieldModelFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = models.MultiFieldModel
+        sqlalchemy_get_or_create = ('slug',)
+        sqlalchemy_session = models.session
+        sqlalchemy_session_persistence = 'commit'
 
+    id = factory.Sequence(lambda n: n)
+    foo = factory.Sequence(lambda n: 'foo%d' % n)
+
+
+class WithGetOrCreateFieldFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = models.StandardModel
+        sqlalchemy_get_or_create = ('foo',)
+        sqlalchemy_session = models.session
+        sqlalchemy_session_persistence = 'commit'
+
+    id = factory.Sequence(lambda n: n)
+    foo = factory.Sequence(lambda n: 'foo%d' % n)
+
+
+class WithMultipleGetOrCreateFieldsFactory(SQLAlchemyModelFactory):
+    class Meta:
+        model = models.MultifieldUniqueModel
+        sqlalchemy_get_or_create = ("slug", "text",)
+        sqlalchemy_session = models.session
+        sqlalchemy_session_persistence = 'commit'
+
+    id = factory.Sequence(lambda n: n)
+    slug = factory.Sequence(lambda n: "slug%s" % n)
+    text = factory.Sequence(lambda n: "text%s" % n)
+
+
+class SQLAlchemyPkSequenceTestCase(unittest.TestCase):
     def setUp(self):
-        super(SQLAlchemyPkSequenceTestCase, self).setUp()
+        super().setUp()
         StandardFactory.reset_sequence(1)
         NonIntegerPkFactory._meta.sqlalchemy_session.rollback()
 
@@ -76,9 +109,64 @@ class SQLAlchemyPkSequenceTestCase(unittest.TestCase):
         self.assertEqual(0, std2.id)
 
 
+class SQLAlchemyGetOrCreateTests(unittest.TestCase):
+    def setUp(self):
+        models.session.rollback()
+
+    def test_simple_call(self):
+        obj1 = WithGetOrCreateFieldFactory(foo='foo1')
+        obj2 = WithGetOrCreateFieldFactory(foo='foo1')
+        self.assertEqual(obj1, obj2)
+
+    def test_missing_arg(self):
+        with self.assertRaises(factory.FactoryError):
+            MultifieldModelFactory()
+
+    def test_raises_exception_when_existing_objs(self):
+        StandardFactory.create_batch(2, foo='foo')
+        with self.assertRaises(sqlalchemy.orm.exc.MultipleResultsFound):
+            WithGetOrCreateFieldFactory(foo='foo')
+
+    def test_multicall(self):
+        objs = MultifieldModelFactory.create_batch(
+            6,
+            slug=factory.Iterator(['main', 'alt']),
+        )
+        self.assertEqual(6, len(objs))
+        self.assertEqual(2, len(set(objs)))
+        self.assertEqual(
+            list(
+                obj.slug for obj in models.session.query(
+                    models.MultiFieldModel.slug
+                )
+            ),
+            ["alt", "main"],
+        )
+
+
+class MultipleGetOrCreateFieldsTest(unittest.TestCase):
+    def setUp(self):
+        models.session.rollback()
+
+    def test_one_defined(self):
+        obj1 = WithMultipleGetOrCreateFieldsFactory()
+        obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
+        self.assertEqual(obj1, obj2)
+
+    def test_both_defined(self):
+        obj1 = WithMultipleGetOrCreateFieldsFactory()
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug, text="alt")
+
+    def test_unique_field_not_in_get_or_create(self):
+        WithMultipleGetOrCreateFieldsFactory(title='Title')
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            WithMultipleGetOrCreateFieldsFactory(title='Title')
+
+
 class SQLAlchemySessionPersistenceTestCase(unittest.TestCase):
     def setUp(self):
-        super(SQLAlchemySessionPersistenceTestCase, self).setUp()
+        super().setUp()
         self.mock_session = mock.NonCallableMagicMock(spec=models.session)
 
     def test_flushing(self):
@@ -127,38 +215,10 @@ class SQLAlchemySessionPersistenceTestCase(unittest.TestCase):
                     sqlalchemy_session_persistence = 'invalid_persistence_option'
                     model = models.StandardModel
 
-    def test_force_flush_deprecation(self):
-        with warnings.catch_warnings(record=True) as warning_list:
-            # Do not turn expected warning into an error.
-            warnings.filterwarnings("default", category=DeprecationWarning, module=r"tests\.test_alchemy")
-
-            class OutdatedPersistenceFactory(StandardFactory):
-                class Meta:
-                    force_flush = True
-                    sqlalchemy_session = self.mock_session
-
-        # There should be *1* DeprecationWarning
-        self.assertEqual(len(warning_list), 1)
-        warning = warning_list[0]
-        self.assertTrue(issubclass(warning.category, DeprecationWarning))
-
-        # The warning text should point to the class declaration.
-        text = warnings.formatwarning(warning.message, warning.category, warning.filename, warning.lineno)
-        self.assertIn('test_alchemy.py', text)
-        self.assertIn('class OutdatedPersistenceFactory', text)
-
-        # However, we shall keep the old-style behavior.
-        self.mock_session.commit.assert_not_called()
-        self.mock_session.flush.assert_not_called()
-
-        OutdatedPersistenceFactory.create()
-        self.mock_session.commit.assert_not_called()
-        self.mock_session.flush.assert_called_once_with()
-
 
 class SQLAlchemyNonIntegerPkTestCase(unittest.TestCase):
     def setUp(self):
-        super(SQLAlchemyNonIntegerPkTestCase, self).setUp()
+        super().setUp()
         NonIntegerPkFactory.reset_sequence()
         NonIntegerPkFactory._meta.sqlalchemy_session.rollback()
 
@@ -197,7 +257,39 @@ class SQLAlchemyNoSessionTestCase(unittest.TestCase):
             NoSessionFactory.create()
 
     def test_build_does_not_raises_exception_when_no_session_was_set(self):
+        NoSessionFactory.reset_sequence()  # Make sure we start at test ID 0
         inst0 = NoSessionFactory.build()
         inst1 = NoSessionFactory.build()
         self.assertEqual(inst0.id, 0)
         self.assertEqual(inst1.id, 1)
+
+
+class NameConflictTests(unittest.TestCase):
+    """Regression test for `TypeError: _save() got multiple values for argument 'session'`
+
+    See #775.
+    """
+    def test_no_name_conflict_on_save(self):
+        class SpecialFieldWithSaveFactory(SQLAlchemyModelFactory):
+            class Meta:
+                model = models.SpecialFieldModel
+                sqlalchemy_session = models.session
+
+            id = factory.Sequence(lambda n: n)
+            session = ''
+
+        saved_child = SpecialFieldWithSaveFactory()
+        self.assertEqual(saved_child.session, "")
+
+    def test_no_name_conflict_on_get_or_create(self):
+        class SpecialFieldWithGetOrCreateFactory(SQLAlchemyModelFactory):
+            class Meta:
+                model = models.SpecialFieldModel
+                sqlalchemy_get_or_create = ('session',)
+                sqlalchemy_session = models.session
+
+            id = factory.Sequence(lambda n: n)
+            session = ''
+
+        get_or_created_child = SpecialFieldWithGetOrCreateFactory()
+        self.assertEqual(get_or_created_child.session, "")

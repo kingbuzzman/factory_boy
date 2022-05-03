@@ -1,19 +1,150 @@
 ChangeLog
 =========
 
-2.12.1 (unreleased)
--------------------
+.. Note for v4.x: don't forget to check "Deprecated" sections for removal.
+
+3.3.0 (unreleased)
+------------------
+
+*New:*
+
+    - :issue:`366`: Add :class:`factory.django.Password` to generate Django :class:`~django.contrib.auth.models.User`
+      passwords.
+    - Add support for Django 3.2
+    - Add support for Django 4.0
+    - Add support for Python 3.10
 
 *Bugfix:*
 
-    - Fix issue with SubFactory not preserving signal muting behaviour of the used factory, thanks `Patrick Stein <https://github.com/PFStein>`_.
-    - Fix issue with overriding params in a Trait, thanks `Grégoire Rocher <https://github.com/cecedille1>`_.
-    - :issue:`598`: Limit ``get_or_create`` behavior to fields specified in ``django_get_or_create``.
-    - :issue:`606`: Re-raise :class:`~django.db.IntegrityError` when `django_get_or_create` with multiple fields fails to lookup model using user provided keyword arguments.
+    - Do not override signals receivers registered in a :meth:`~factory.django.mute_signals` context.
+
+    - :issue:`775`: Change the signature for :meth:`~factory.alchemy.SQLAlchemyModelFactory._save` and
+      :meth:`~factory.alchemy.SQLAlchemyModelFactory._get_or_create` to avoid argument names clashes with a field named
+      ``session``.
+
+*Deprecated:*
+
+    - :class:`~factory.django.DjangoModelFactory` will stop issuing a second call to
+      :meth:`~django.db.models.Model.save` on the created instance when :ref:`post-generation-hooks` return a value.
+
+      To help with the transition, :class:`factory.django.DjangoModelFactory._after_postgeneration` raises a
+      :class:`DeprecationWarning` when calling :meth:`~django.db.models.Model.save`. Inspect your
+      :class:`~factory.django.DjangoModelFactory` subclasses:
+
+      - If the :meth:`~django.db.models.Model.save` call is not needed after :class:`~factory.PostGeneration`, set
+        :attr:`factory.django.DjangoOptions.skip_postgeneration_save` to ``True`` in the factory meta.
+
+      - Otherwise, the instance has been modified by :class:`~factory.PostGeneration` hooks and needs to be
+        :meth:`~django.db.models.Model.save`\ d. Either:
+
+          - call :meth:`django.db.models.Model.save` in the :class:`~factory.PostGeneration` hook that modifies the
+            instance, or
+          - override :class:`~factory.django.DjangoModelFactory._after_postgeneration` to
+            :meth:`~django.db.models.Model.save` the instance.
 
 *Removed:*
-    - Drop support for Python 3.4. This version [is not maintained anymore](https://www.python.org/downloads/release/python-3410/).
-    - Drop support for Django 2.0. This version [is not maintained anymore](https://www.djangoproject.com/download/#supported-versions).
+
+    - Drop support for Django 3.0
+    - Drop support for Django 3.1
+    - Drop support for Python 3.6
+
+3.2.0 (2020-12-28)
+------------------
+
+*New:*
+
+    - Add support for Django 3.1
+    - Add support for Python 3.9
+
+*Removed:*
+
+    - Drop support for Django 1.11. This version `is not maintained anymore <https://www.djangoproject.com/download/#supported-versions>`__.
+    - Drop support for Python 3.5. This version `is not maintained anymore <https://devguide.python.org/devcycle/#end-of-life-branches>`__.
+
+*Deprecated:*
+
+    - :func:`factory.use_strategy`. Use :attr:`factory.FactoryOptions.strategy` instead.
+      The purpose of :func:`~factory.use_strategy` duplicates the factory option. Follow :pep:`20`: *There should be
+      one-- and preferably only one --obvious way to do it.*
+
+      :func:`~factory.use_strategy()` will be removed in the next major version.
+
+*Bug fix:*
+
+    - :issue:`785` :issue:`786` :issue:`787` :issue:`788` :issue:`790` :issue:`796`: Calls to :class:`factory.Faker`
+      and :class:`factory.django.FileField` within a :class:`~factory.Trait` or :class:`~factory.Maybe` no longer lead to
+      a ``KeyError`` crash.
+
+
+3.1.0 (2020-10-02)
+------------------
+
+*New:*
+
+    - Allow all types of declarations in :class:`factory.Faker` calls - enables references to other faker-defined attributes.
+
+
+3.0.1 (2020-08-13)
+------------------
+
+*Bug fix:*
+
+    - :issue:`769`: Fix ``import factory; factory.django.DjangoModelFactory`` and similar calls.
+
+
+3.0.0 (2020-08-12)
+------------------
+
+Breaking changes
+""""""""""""""""
+
+The following aliases were removed:
+
++------------------------------------------------+---------------------------------------------------+
+| Broken alias                                   | New import                                        |
++================================================+===================================================+
+| ``from factory import DjangoModelFactory``     | ``from factory.django import DjangoModelFactory`` |
++------------------------------------------------+---------------------------------------------------+
+| ``from factory import MogoFactory``            | ``from factory.mogo import MogoFactory``          |
++------------------------------------------------+---------------------------------------------------+
+| ``from factory.fuzzy import get_random_state`` | ``from factory.random import get_random_state``   |
++------------------------------------------------+---------------------------------------------------+
+| ``from factory.fuzzy import set_random_state`` | ``from factory.random import set_random_state``   |
++------------------------------------------------+---------------------------------------------------+
+| ``from factory.fuzzy import reseed_random``    | ``from factory.random import reseed_random``      |
++------------------------------------------------+---------------------------------------------------+
+
+*Removed:*
+
+    - Drop support for Python 2 and 3.4. These versions `are not maintained anymore <https://devguide.python.org/devcycle/#end-of-life-branches>`__.
+    - Drop support for Django 2.0 and 2.1. These versions `are not maintained anymore <https://www.djangoproject.com/download/#supported-versions>`__.
+    - Remove deprecated ``force_flush`` from ``SQLAlchemyModelFactory`` options. Use
+      ``sqlalchemy_session_persistence = "flush"`` instead.
+    - Drop deprecated ``attributes()`` from :class:`~factory.Factory` subclasses; use
+      ``factory.make_factory(dict, FactoryClass._meta.pre_declarations)`` instead.
+    - Drop deprecated ``declarations()`` from :class:`~factory.Factory` subclasses; use ``FactoryClass._meta.pre_declarations`` instead.
+    - Drop ``factory.compat`` module.
+
+*New:*
+
+    - Add support for Python 3.8
+    - Add support for Django 2.2 and 3.0
+    - Report misconfiguration when a :py:class:`~factory.Factory` is used as the :py:attr:`~factory.Factory.model` for another :py:class:`~factory.Factory`.
+    - Allow configuring the color palette of :py:class:`~factory.django.ImageField`.
+    - :py:meth:`get_random_state()` now represents the state of Faker and ``factory_boy`` fuzzy attributes.
+    - Add SQLAlchemy ``get_or_create`` support
+
+*Improvements:*
+
+    - :issue:`561`: Display a developer-friendly error message when providing a model instead of a factory in a :class:`~factory.declarations.SubFactory` class.
+
+*Bug fix:*
+
+    - Fix issue with SubFactory not preserving signal muting behavior of the used factory, thanks `Patrick Stein <https://github.com/PFStein>`_.
+    - Fix issue with overriding parameters in a Trait, thanks `Grégoire Rocher <https://github.com/cecedille1>`_.
+    - :issue:`598`: Limit ``get_or_create`` behavior to fields specified in ``django_get_or_create``.
+    - :issue:`606`: Re-raise :class:`~django.db.IntegrityError` when ``django_get_or_create`` with multiple fields fails to lookup model using user provided keyword arguments.
+    - :issue:`630`: TypeError masked by __repr__ AttributeError when initializing ``Maybe`` with inconsistent phases.
 
 
 2.12.0 (2019-05-11)
@@ -29,7 +160,7 @@ ChangeLog
     - Add :class:`~factory.RelatedFactoryList` class for one-to-many support, thanks `Sean Harrington <https://github.com/seanharr11>`_.
     - Make the `locale` argument for :class:`~factory.faker.Faker` keyword-only
 
-*Bugfix:*
+*Bug fix:*
 
     - Allow renamed arguments to be optional, thanks to `Justin Crown <https://github.com/mrname>`_.
     - Fix `django_get_or_create` behavior when using multiple fields with `unique=True`, thanks to `@YPCrumble <https://github.com/YPCrumble>`
@@ -38,7 +169,7 @@ ChangeLog
 2.11.1 (2018-05-05)
 -------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix passing deep context to a :class:`~factory.SubFactory` (``Foo(x__y__z=factory.Faker('name')``)
 
@@ -46,7 +177,7 @@ ChangeLog
 2.11.0 (2018-05-05)
 -------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix :class:`~factory.fuzzy.FuzzyFloat` to return a 15 decimal digits precision float by default
     - :issue:`451`: Restore :class:`~factory.django.FileField` to a
@@ -58,7 +189,7 @@ ChangeLog
 2.10.0 (2018-01-28)
 -------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - :issue:`443`: Don't crash when calling :meth:`factory.Iterator.reset()` on a brand new iterator.
 
@@ -72,7 +203,7 @@ ChangeLog
 2.9.2 (2017-08-03)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix declaration corruption bug when a factory defined `foo__bar__baz=1` and a caller
       provided a `foo__bar=x` parameter at call time: this got merged into the factory's base
@@ -83,7 +214,7 @@ ChangeLog
 2.9.1 (2017-08-02)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix packaging issues (see https://github.com/zestsoftware/zest.releaser/issues/212)
     - Don't crash when debugging PostGenerationDeclaration
@@ -94,7 +225,7 @@ ChangeLog
 ------------------
 
 This version brings massive changes to the core engine, thus reducing the number of
-corner cases and weird behaviourrs.
+corner cases and weird behaviors.
 
 *New:*
 
@@ -115,7 +246,7 @@ corner cases and weird behaviourrs.
 2.8.1 (2016-12-17)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix packaging issues.
 
@@ -131,7 +262,7 @@ corner cases and weird behaviourrs.
       thanks to `Oleg Pidsadnyi <https://github.com/olegpidsadnyi>`_.
     - :issue:`309`: Provide new options for SQLAlchemy session persistence
 
-*Bugfix:*
+*Bug fix:*
 
     - :issue:`334`: Adjust for the package change in ``faker``
 
@@ -182,7 +313,7 @@ corner cases and weird behaviourrs.
     - Simplify imports for ORM layers, now available through a simple ``factory`` import,
       at ``factory.alchemy.SQLAlchemyModelFactory`` / ``factory.django.DjangoModelFactory`` / ``factory.mongoengine.MongoEngineFactory``.
 
-*Bugfix:*
+*Bug fix:*
 
     - :issue:`201`: Properly handle custom Django managers when dealing with abstract Django models.
     - :issue:`212`: Fix :meth:`factory.django.mute_signals` to handle Django's signal caching
@@ -194,7 +325,7 @@ corner cases and weird behaviourrs.
 2.5.2 (2015-04-21)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Add support for Django 1.7/1.8
     - Add support for mongoengine>=0.9.0 / pymongo>=2.1
@@ -204,7 +335,7 @@ corner cases and weird behaviourrs.
 2.5.1 (2015-03-27)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Respect custom managers in :class:`~factory.django.DjangoModelFactory` (see :issue:`192`)
     - Allow passing declarations (e.g :class:`~factory.Sequence`) as parameters to :class:`~factory.django.FileField`
@@ -222,7 +353,7 @@ corner cases and weird behaviourrs.
     - Support non-default databases at the factory level (see :issue:`171`)
     - Make :class:`factory.django.FileField` and :class:`factory.django.ImageField` non-post_generation, i.e normal fields also available in ``save()`` (see :issue:`141`).
 
-*Bugfix:*
+*Bug fix:*
 
     - Avoid issues when using :meth:`factory.django.mute_signals` on a base factory class (see :issue:`183`).
     - Fix limitations of :class:`factory.StubFactory`, that can now use :class:`factory.SubFactory` and co (see :issue:`131`).
@@ -273,7 +404,7 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
 2.4.1 (2014-06-23)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix overriding deeply inherited attributes (set in one factory, overridden in a subclass, used in a sub-sub-class).
 
@@ -315,10 +446,10 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
 2.3.1 (2014-01-22)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
-    - Fix badly written assert containing state-changing code, spotted by `chsigi <https://github.com/chsigi>`_ (:pr:`126`)
-    - Don't crash when handling objects whose __repr__ is non-pure-ascii bytes on Py2,
+    - Fix badly written assert containing state-changing code, spotted by ``chsigi`` (:pr:`126`)
+    - Don't crash when handling objects whose ``__repr__`` is non-pure-ASCII bytes on Python 2,
       discovered by `mbertheau <https://github.com/mbertheau>`_ (:issue:`123`) and `strycore <https://github.com/strycore>`_ (:pr:`127`)
 
 .. _v2.3.0:
@@ -337,7 +468,7 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
 2.2.1 (2013-09-24)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fixed sequence counter for :class:`~factory.django.DjangoModelFactory` when a factory
       inherits from another factory relating to an abstract model.
@@ -347,13 +478,13 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
 2.2.0 (2013-09-24)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Removed duplicated :class:`~factory.alchemy.SQLAlchemyModelFactory` lurking in :mod:`factory`
       (:pr:`83`)
     - Properly handle sequences within object inheritance chains.
-      If FactoryA inherits from FactoryB, and their associated classes share the same link,
-      sequence counters will be shared (:issue:`93`)
+      If ``FactoryA`` inherits from ``FactoryB``, and their associated classes
+      share the same link, sequence counters will be shared (:issue:`93`)
     - Properly handle nested :class:`~factory.SubFactory` overrides
 
 *New:*
@@ -380,7 +511,7 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
 2.1.1 (2013-07-02)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Properly retrieve the ``color`` keyword argument passed to :class:`~factory.django.ImageField`
 
@@ -407,9 +538,9 @@ This takes care of all ``FACTORY_FOR`` occurrences; the files containing other a
     - Add :class:`factory.django.FileField` and :class:`factory.django.ImageField` hooks for
       related Django model fields (:issue:`52`)
 
-*Bugfix*
+*Bug fix*
 
-    - Properly handle non-integer pks in :class:`~factory.django.DjangoModelFactory` (:issue:`57`).
+    - Properly handle non-integer primary keys in :class:`~factory.django.DjangoModelFactory` (:issue:`57`).
     - Disable :class:`~factory.RelatedFactory` generation when a specific value was
       passed (:issue:`62`, thanks to `Gabe Koscky <https://github.com/dhekke>`_)
 
@@ -534,7 +665,7 @@ All warnings will turn into errors starting from v2.0.0.
 In order to upgrade client code, apply the following rules:
 
 - Add a ``FACTORY_FOR`` attribute pointing to the target class to each
-  :class:`~factory.Factory`, instead of relying on automagic associated class
+  :class:`~factory.Factory`, instead of relying on automatic associated class
   discovery
 - When using factory_boy for Django models, have each factory inherit from
   :class:`~factory.django.DjangoModelFactory`
@@ -564,7 +695,7 @@ In order to upgrade client code, apply the following rules:
 1.1.5 (2012-07-09)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
     - Fix :class:`~factory.PostGenerationDeclaration` and derived classes.
 
@@ -588,7 +719,7 @@ In order to upgrade client code, apply the following rules:
 1.1.3 (2012-03-09)
 ------------------
 
-*Bugfix:*
+*Bug fix:*
 
   - Fix packaging rules
 
@@ -627,9 +758,9 @@ In order to upgrade client code, apply the following rules:
   - Provide the :func:`~factory.make_factory` helper: ``MyClassFactory = make_factory(MyClass, x=3, y=4)``
   - Add :func:`~factory.build`, :func:`~factory.create`, :func:`~factory.stub` helpers
 
-*Bugfix:*
+*Bug fix:*
 
-  - Allow classmethod/staticmethod on factories
+  - Allow ``classmethod``/``staticmethod`` on factories
 
 *Deprecation:*
 
@@ -652,11 +783,11 @@ In order to upgrade client code, apply the following rules:
   - Provide :class:`~factory.django.DjangoModelFactory`, whose :class:`~factory.Sequence` counter starts at the next free database id
   - Introduce :class:`~factory.SelfAttribute`, a shortcut for ``factory.LazyAttribute(lambda o: o.foo.bar.baz``.
 
-*Bugfix:*
+*Bug fix:*
 
   - Handle nested :class:`~factory.SubFactory`
   - Share sequence counter between parent and subclasses
-  - Fix :class:`~factory.SubFactory` / :class:`~factory.Sequence` interferences
+  - Fix :class:`~factory.SubFactory` / :class:`~factory.Sequence` interference
 
 
 .. _v1.0.2:
@@ -679,7 +810,7 @@ In order to upgrade client code, apply the following rules:
   - Allow :class:`~factory.Factory` inheritance
   - Improve handling of custom build/create functions
 
-*Bugfix:*
+*Bug fix:*
 
   - Fix concurrency between :class:`~factory.LazyAttribute` and :class:`~factory.Sequence`
 
@@ -697,8 +828,6 @@ In order to upgrade client code, apply the following rules:
 Credits
 -------
 
-* Initial version by Mark Sandstrom (2010)
-* Developed by Raphaël Barrois since 2011
-
+See :doc:`credits`.
 
 .. vim:et:ts=4:sw=4:tw=119:ft=rst:

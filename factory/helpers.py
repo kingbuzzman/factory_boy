@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 
@@ -20,10 +19,11 @@ def debug(logger='factory', stream=None):
     logger_obj.addHandler(handler)
     logger_obj.setLevel(logging.DEBUG)
 
-    yield
-
-    logger_obj.setLevel(old_level)
-    logger_obj.removeHandler(handler)
+    try:
+        yield
+    finally:
+        logger_obj.setLevel(old_level)
+        logger_obj.removeHandler(handler)
 
 
 def make_factory(klass, **kwargs):

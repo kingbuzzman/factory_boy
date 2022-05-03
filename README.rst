@@ -1,29 +1,32 @@
 factory_boy
 ===========
 
-.. image:: https://secure.travis-ci.org/FactoryBoy/factory_boy.svg?branch=master
-    :target: https://travis-ci.org/FactoryBoy/factory_boy/
+.. image:: https://github.com/FactoryBoy/factory_boy/workflows/Test/badge.svg
+    :target: https://github.com/FactoryBoy/factory_boy/actions?query=workflow%3ATest
+
+.. image:: https://github.com/FactoryBoy/factory_boy/workflows/Check/badge.svg
+    :target: https://github.com/FactoryBoy/factory_boy/actions?query=workflow%3ACheck
 
 .. image:: https://img.shields.io/pypi/v/factory_boy.svg
     :target: https://factoryboy.readthedocs.io/en/latest/changelog.html
     :alt: Latest Version
 
 .. image:: https://img.shields.io/pypi/pyversions/factory_boy.svg
-    :target: https://pypi.org/project/factory_boy/
+    :target: https://pypi.org/project/factory-boy/
     :alt: Supported Python versions
 
 .. image:: https://img.shields.io/pypi/wheel/factory_boy.svg
-    :target: https://pypi.org/project/factory_boy/
+    :target: https://pypi.org/project/factory-boy/
     :alt: Wheel status
 
 .. image:: https://img.shields.io/pypi/l/factory_boy.svg
-    :target: https://pypi.org/project/factory_boy/
+    :target: https://pypi.org/project/factory-boy/
     :alt: License
 
 factory_boy is a fixtures replacement based on thoughtbot's `factory_bot <https://github.com/thoughtbot/factory_bot>`_.
 
 As a fixtures replacement tool, it aims to replace static, hard to maintain fixtures
-with easy-to-use factories for complex object.
+with easy-to-use factories for complex objects.
 
 Instead of building an exhaustive test setup with every possible combination of corner cases,
 ``factory_boy`` allows you to use objects customized for the current test,
@@ -61,7 +64,7 @@ while only declaring the test-specific fields:
             )
             # etc.
 
-factory_boy is designed to work well with various ORMs (Django, Mongo, SQLAlchemy),
+factory_boy is designed to work well with various ORMs (Django, MongoDB, SQLAlchemy),
 and can easily be extended for other libraries.
 
 Its main features include:
@@ -77,14 +80,14 @@ Links
 
 * Documentation: https://factoryboy.readthedocs.io/
 * Repository: https://github.com/FactoryBoy/factory_boy
-* Package: https://pypi.org/project/factory_boy/
+* Package: https://pypi.org/project/factory-boy/
 * Mailing-list: `factoryboy@googlegroups.com <mailto:factoryboy@googlegroups.com>`_ | https://groups.google.com/forum/#!forum/factoryboy
 
 
 Download
 --------
 
-PyPI: https://pypi.org/project/factory_boy/
+PyPI: https://pypi.org/project/factory-boy/
 
 .. code-block:: sh
 
@@ -109,7 +112,7 @@ Usage
 Defining factories
 """"""""""""""""""
 
-Factories declare a set of attributes used to instantiate an object.
+Factories declare a set of attributes used to instantiate a Python object.
 The class of the object must be defined in the ``model`` field of a ``class Meta:`` attribute:
 
 .. code-block:: python
@@ -135,24 +138,39 @@ The class of the object must be defined in the ``model`` field of a ``class Meta
         admin = True
 
 
+ORM integration
+"""""""""""""""
+
+factory_boy integration with Object Relational Mapping (ORM) tools is provided
+through specific ``factory.Factory`` subclasses:
+
+* Django, with ``factory.django.DjangoModelFactory``
+* Mogo, with ``factory.mogo.MogoFactory``
+* MongoEngine, with ``factory.mongoengine.MongoEngineFactory``
+* SQLAlchemy, with ``factory.alchemy.SQLAlchemyModelFactory``
+
+More details can be found in the ORM section.
+
+
 Using factories
 """""""""""""""
 
-factory_boy supports several different build strategies: build, create, and stub:
+factory_boy supports several different instantiation strategies: build, create, and stub:
 
 .. code-block:: python
 
     # Returns a User instance that's not saved
     user = UserFactory.build()
 
-    # Returns a saved User instance
+    # Returns a saved User instance.
+    # UserFactory must subclass an ORM base class, such as DjangoModelFactory.
     user = UserFactory.create()
 
     # Returns a stub object (just a bunch of attributes)
     obj = UserFactory.stub()
 
 
-You can use the Factory class as a shortcut for the default build strategy:
+You can use the Factory class as a shortcut for the default instantiation strategy:
 
 .. code-block:: python
 
@@ -198,7 +216,7 @@ For this, factory_boy relies on the excellent `faker <https://faker.readthedocs.
 
 .. code-block:: pycon
 
-    >>> UserFactory()
+    >>> RandomUserFactory()
     <User: Lucy Murray>
 
 
@@ -234,7 +252,7 @@ These "lazy" attributes can be added as follows:
 
         first_name = 'Joe'
         last_name = 'Blow'
-        email = factory.LazyAttribute(lambda a: '{0}.{1}@example.com'.format(a.first_name, a.last_name).lower())
+        email = factory.LazyAttribute(lambda a: '{}.{}@example.com'.format(a.first_name, a.last_name).lower())
         date_joined = factory.LazyFunction(datetime.now)
 
 .. code-block:: pycon
@@ -258,7 +276,7 @@ Unique values in a specific format (for example, e-mail addresses) can be genera
         class Meta:
             model = models.User
 
-        email = factory.Sequence(lambda n: 'person{0}@example.com'.format(n))
+        email = factory.Sequence(lambda n: 'person{}@example.com'.format(n))
 
     >>> UserFactory().email
     'person0@example.com'
@@ -300,20 +318,20 @@ The associated object's strategy will be used:
     >>> post.author.id is None
     True
 
+Support Policy
+--------------
 
-ORM Support
-"""""""""""
+``factory_boy`` supports active Python versions as well as PyPy3.
 
-factory_boy has specific support for a few ORMs, through specific ``factory.Factory`` subclasses:
-
-* Django, with ``factory.django.DjangoModelFactory``
-* Mogo, with ``factory.mogo.MogoFactory``
-* MongoEngine, with ``factory.mongoengine.MongoEngineFactory``
-* SQLAlchemy, with ``factory.alchemy.SQLAlchemyModelFactory``
-
+- **Python**'s `supported versions
+  <https://devguide.python.org/#status-of-python-branches>`__.
+- **Django**'s `supported
+  versions <https://www.djangoproject.com/download/#supported-versions>`__.
+- **SQLAlchemy**: `latest version on PyPI <https://pypi.org/project/SQLAlchemy/>`__.
+- **MongoEngine**: `latest version on PyPI <https://pypi.org/project/mongoengine/>`__.
 
 Debugging factory_boy
-"""""""""""""""""""""
+---------------------
 
 Debugging factory_boy can be rather complex due to the long chains of calls.
 Detailed logging is available through the ``factory`` logger.
@@ -345,16 +363,6 @@ This will yield messages similar to those (artificial indentation):
       LazyStub: Computed values, got tests.test_using.TestModel2Factory(two=<tests.test_using.TestModel object at 0x1e15410>)
     BaseFactory: Generating tests.test_using.TestModel2Factory(two=<tests.test_using.TestModel object at 0x1e15410>)
 
-Support Policy
---------------
-
-``factory_boy`` supports Python 2.7, 3.5 to 3.7, as well as PyPy 2.7 and 5.8.
-
-- **Django**'s [supported
-  versions](https://www.djangoproject.com/download/#supported-versions).
-- **SQLAlchemy**: [latest version on PyPI](https://pypi.org/project/SQLAlchemy/).
-- **mongoengine**: [latest version on PyPI](https://pypi.org/project/mongoengine/).
-
 Contributing
 ------------
 
@@ -363,11 +371,18 @@ factory_boy is distributed under the MIT License.
 Issues should be opened through `GitHub Issues <https://github.com/FactoryBoy/factory_boy/issues/>`_; whenever possible, a pull request should be included.
 Questions and suggestions are welcome on the `mailing-list <mailto:factoryboy@googlegroups.com>`_.
 
-All pull request should pass the test suite, which can be launched simply with:
+Development dependencies can be installed in a `virtualenv
+<https://docs.python.org/3/tutorial/venv.html>`_ with:
 
 .. code-block:: sh
 
-    $ make test
+    $ pip install --editable '.[dev]'
+
+All pull requests should pass the test suite, which can be launched simply with:
+
+.. code-block:: sh
+
+    $ make testall
 
 
 
@@ -386,7 +401,7 @@ To test with a specific framework version, you may use a ``tox`` target:
     $ tox --listenvs
 
     # run tests inside a specific environment
-    $ tox -e py36-django20-alchemy13-mongoengine017
+    $ tox -e py310-djangomain-alchemy-mongoengine
 
 Valid options are:
 
@@ -395,8 +410,48 @@ Valid options are:
 * ``ALCHEMY`` for ``SQLAlchemy``
 
 
-To avoid running ``mongoengine`` tests (e.g no mongo server installed), run:
+To avoid running ``mongoengine`` tests (e.g no MongoDB server installed), run:
 
 .. code-block:: sh
 
     $ make SKIP_MONGOENGINE=1 test
+
+
+Packaging
+---------
+
+For users interesting in packaging FactoryBoy into downstream distribution channels
+(e.g. ``.deb``, ``.rpm``, ``.ebuild``), the following tips might be helpful:
+
+Dependencies
+""""""""""""
+
+The package's run-time dependencies are listed in ``setup.cfg``.
+The dependencies useful for building and testing the library are covered by the
+``dev`` and ``doc`` extras.
+
+Moreover, all development / testing tasks are driven through ``make(1)``.
+
+Building
+""""""""
+
+In order to run the build steps (currently only for docs), run:
+
+.. code-block:: sh
+
+    python setup.py egg_info
+    make doc
+
+Testing
+"""""""
+
+When testing for the active Python environment, run the following:
+
+.. code-block:: sh
+
+    make test
+
+.. note::
+
+    You must make sure that the ``factory`` module is importable, as it is imported from
+    the testing code.

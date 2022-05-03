@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
-# Backward compatibility; this should be removed soon.
-from . import alchemy, django, mogo, mongoengine
 from .base import (
     BaseDictFactory,
     BaseListFactory,
@@ -29,6 +26,7 @@ from .declarations import (
     Sequence,
     SubFactory,
     Trait,
+    Transformer,
 )
 from .enums import BUILD_STRATEGY, CREATE_STRATEGY, STUB_STRATEGY
 from .errors import FactoryError
@@ -54,9 +52,30 @@ from .helpers import (
     stub_batch,
 )
 
-__version__ = '2.12.1.dev0'
+try:
+    from . import alchemy
+except ImportError:
+    pass
+try:
+    from . import django
+except ImportError:
+    pass
+try:
+    from . import mogo
+except ImportError:
+    pass
+try:
+    from . import mongoengine
+except ImportError:
+    pass
+
 __author__ = 'Raphaël Barrois <raphael.barrois+fboy@polytechnique.org>'
+try:
+    # Python 3.8+
+    from importlib.metadata import version
 
+    __version__ = version("factory_boy")
+except ImportError:
+    import pkg_resources
 
-MogoFactory = mogo.MogoFactory
-DjangoModelFactory = django.DjangoModelFactory
+    __version__ = pkg_resources.get_distribution("factory_boy").version

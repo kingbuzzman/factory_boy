@@ -12,7 +12,7 @@ First, let's define a couple of objects:
 
 .. code-block:: python
 
-    class Account(object):
+    class Account:
         def __init__(self, username, email, date_joined):
             self.username = username
             self.email = email
@@ -22,7 +22,7 @@ First, let's define a couple of objects:
             return '%s (%s)' % (self.username, self.email)
 
 
-    class Profile(object):
+    class Profile:
 
         GENDER_MALE = 'm'
         GENDER_FEMALE = 'f'
@@ -35,11 +35,11 @@ First, let's define a couple of objects:
             self.lastname = lastname
             self.planet = planet
 
-        def __unicode__(self):
-            return u'%s %s (%s)' % (
-                unicode(self.firstname),
-                unicode(self.lastname),
-                unicode(self.account.username),
+        def __str__(self):
+            return '%s %s (%s)' % (
+                self.firstname,
+                self.lastname,
+                self.account.username,
             )
 
 Factories
@@ -72,8 +72,8 @@ And now, we'll define the related factories:
 
         account = factory.SubFactory(AccountFactory)
         gender = factory.Iterator([objects.Profile.GENDER_MALE, objects.Profile.GENDER_FEMALE])
-        firstname = u'John'
-        lastname = u'Doe'
+        firstname = 'John'
+        lastname = 'Doe'
 
 
 
@@ -86,8 +86,8 @@ If we commonly use a specific variant of our objects, we can refine a factory ac
 
     class FemaleProfileFactory(ProfileFactory):
         gender = objects.Profile.GENDER_FEMALE
-        firstname = u'Jane'
-        user__username = factory.Sequence(lambda n: 'jane%s' % n)
+        firstname = 'Jane'
+        account__username = factory.Sequence(lambda n: 'jane%s' % n)
 
 
 

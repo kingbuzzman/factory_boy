@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 
@@ -13,8 +12,6 @@ Usage:
         first_name = factory.Faker('name')
 """
 
-
-from __future__ import absolute_import, unicode_literals
 
 import contextlib
 
@@ -39,20 +36,16 @@ class Faker(declarations.BaseDeclaration):
         >>> foo = factory.Faker('name')
     """
     def __init__(self, provider, **kwargs):
-        super(Faker, self).__init__()
+        locale = kwargs.pop('locale', None)
         self.provider = provider
-        self.provider_kwargs = kwargs
-        self.locale = kwargs.pop('locale', None)
-
-    def generate(self, extra_kwargs=None):
-        kwargs = {}
-        kwargs.update(self.provider_kwargs)
-        kwargs.update(extra_kwargs or {})
-        subfaker = self._get_faker(self.locale)
-        return subfaker.format(self.provider, **kwargs)
+        super().__init__(
+            locale=locale,
+            **kwargs)
 
     def evaluate(self, instance, step, extra):
-        return self.generate(extra)
+        locale = extra.pop('locale')
+        subfaker = self._get_faker(locale)
+        return subfaker.format(self.provider, **extra)
 
     _FAKER_REGISTRY = {}
     _DEFAULT_LOCALE = faker.config.DEFAULT_LOCALE

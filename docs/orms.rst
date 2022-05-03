@@ -1,3 +1,5 @@
+.. _orm:
+
 Using factory_boy with ORMs
 ===========================
 
@@ -38,14 +40,6 @@ All factories for a Django :class:`~django.db.models.Model` should use the
     * When using :class:`~factory.RelatedFactory` or :class:`~factory.PostGeneration`
       attributes, the base object will be :meth:`saved <django.db.models.Model.save>`
       once all post-generation hooks have run.
-
-
-.. note:: With Django versions 1.8.0 to 1.8.3, it was no longer possible to call ``.build()``
-          on a factory if this factory used a :class:`~factory.SubFactory` pointing
-          to another model: Django refused to set a :class:`~djang.db.models.ForeignKey`
-          to an unsaved :class:`~django.db.models.Model` instance.
-
-          See https://code.djangoproject.com/ticket/10811 and https://code.djangoproject.com/ticket/25160 for details.
 
 
 .. class:: DjangoOptions(factory.base.FactoryOptions)
@@ -95,10 +89,66 @@ All factories for a Django :class:`~django.db.models.Model` should use the
             >>> User.objects.all()
             [<User: john>, <User: jack>]
 
+        .. warning:: When ``django_get_or_create`` is used, be aware that any new
+            values passed to the Factory are **not** used to update an existing model.
+
+            .. code-block:: pycon
+
+                >>> john = UserFactory(username="john")   # Fetches the existing user
+                <User: john>
+
+                >>> john.email
+                "john@example.com"
+
+                >>> john = UserFactory(                   # Fetches the existing user
+                >>>     username="john",                  # and provides a new email value
+                >>>     email="a_new_email@example.com"
+                >>> )
+                <User: john>
+
+                >>> john.email                            # The email value was not updated
+                "john@example.com"
+
+    .. attribute:: skip_postgeneration_save
+
+        Transitional option to prevent
+        :meth:`~factory.django.DjangoModelFactory._after_postgeneration` from
+        issuing a duplicate call to :meth:`~django.db.models.Model.save` on the
+        created instance when :class:`factory.PostGeneration` hooks return a
+        value.
 
 
 Extra fields
 """"""""""""
+
+.. class:: Password
+
+    Applies :func:`~django.contrib.auth.hashers.make_password` to the
+    clear-text argument before to generate the object.
+
+    .. method:: __init__(self, password)
+
+        :param str password: Default password.
+
+    .. code-block:: python
+
+        class UserFactory(factory.django.DjangoModelFactory):
+            class Meta:
+                model = models.User
+
+            password = factory.django.Password('pw')
+
+    .. code-block:: pycon
+
+        >>> from django.contrib.auth.hashers import check_password
+        >>> # Create user with the default password from the factory.
+        >>> user = UserFactory.create()
+        >>> check_password('pw', user.password)
+        True
+        >>> # Override user password at call time.
+        >>> other_user = UserFactory.create(password='other_pw')
+        >>> check_password('other_pw', other_user.password)
+        True
 
 
 .. class:: FileField
@@ -150,6 +200,7 @@ Extra fields
         :param int height: The height of the generated image (default: ``100``)
         :param str color: The color of the generated image (default: ``'green'``)
         :param str format: The image format (as supported by PIL) (default: ``'JPEG'``)
+        :param str palette: The image palette (as supported by PIL) (default: ``'RGB'``)
 
 .. note:: If the value ``None`` was passed for the :class:`FileField` field, this will
           disable field generation:
@@ -320,7 +371,7 @@ To work, this class needs an `SQLAlchemy`_ session object affected to the :attr:
 
     .. attribute:: sqlalchemy_session_persistence
 
-        Control the action taken by sqlalchemy session at the end of a create call.
+        Control the action taken by ``sqlalchemy_session`` at the end of a create call.
 
         Valid values are:
 
@@ -330,15 +381,63 @@ To work, this class needs an `SQLAlchemy`_ session object affected to the :attr:
 
         The default value is ``None``.
 
-        If ``force_flush`` is set to ``True``, it overrides this option.
+    .. attribute:: sqlalchemy_get_or_create
 
-    .. attribute:: force_flush
+        .. versionadded:: 3.0.0
 
-        Force a session ``flush()`` at the end of :func:`~factory.alchemy.SQLAlchemyModelFactory._create()`.
+        Fields whose name are passed in this list will be used to perform a
+        :meth:`Model.query.one_or_none() <sqlalchemy.orm.query.Query.one_or_none>`
+        or the usual :meth:`Session.add() <sqlalchemy.orm.session.Session.add>`:
 
-        .. note::
+        .. code-block:: python
 
-            This option is deprecated. Use ``sqlalchemy_session_persistence`` instead.
+            class UserFactory(factory.alchemy.SQLAlchemyModelFactory):
+                class Meta:
+                    model = User
+                    sqlalchemy_session = session
+                    sqlalchemy_get_or_create = ('username',)
+
+                username = 'john'
+
+        .. code-block:: pycon
+
+            >>> User.query.all()
+            []
+            >>> UserFactory()                   # Creates a new user
+            <User: john>
+            >>> User.query.all()
+            [<User: john>]
+
+            >>> UserFactory()                   # Fetches the existing user
+            <User: john>
+            >>> User.query.all()                # No new user!
+            [<User: john>]
+
+            >>> UserFactory(username='jack')    # Creates another user
+            <User: jack>
+            >>> User.query.all()
+            [<User: john>, <User: jack>]
+
+        .. warning:: When ``sqlalchemy_get_or_create`` is used, be aware that any new
+            values passed to the Factory are **not** used to update an existing model.
+
+            .. code-block:: pycon
+
+                >>> john = UserFactory(username="john")   # Fetches the existing user
+                <User: john>
+
+                >>> john.email
+                "john@example.com"
+
+                >>> john = UserFactory(                   # Fetches the existing user
+                >>>     username="john",                  # and provides a new email value
+                >>>     email="a_new_email@example.com"
+                >>> )
+                <User: john>
+
+                >>> john.email                            # The email value was not updated
+                "john@example.com"
+
 
 A (very) simple example:
 
@@ -370,16 +469,16 @@ A (very) simple example:
             sqlalchemy_session = session   # the SQLAlchemy session object
 
         id = factory.Sequence(lambda n: n)
-        name = factory.Sequence(lambda n: u'User %d' % n)
+        name = factory.Sequence(lambda n: 'User %d' % n)
 
 .. code-block:: pycon
 
     >>> session.query(User).all()
     []
     >>> UserFactory()
-    <User: User 1>
+    <User: User 0>
     >>> session.query(User).all()
-    [<User: User 1>]
+    [<User: User 0>]
 
 
 Managing sessions
@@ -415,7 +514,7 @@ Here is an example layout:
 
 .. code-block:: python
 
-    # myprojet/test/common.py
+    # myproject/test/common.py
 
     from sqlalchemy import orm
     Session = orm.scoped_session(orm.sessionmaker())

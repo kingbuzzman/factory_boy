@@ -8,6 +8,7 @@ SETUP_PY=setup.py
 COVERAGE = python $(shell which coverage)
 FLAKE8 = flake8
 ISORT = isort
+CTAGS = ctags
 
 
 all: default
@@ -31,7 +32,7 @@ clean:
 # DOC: Install and/or upgrade dependencies
 update:
 	pip install --upgrade pip setuptools
-	pip install --upgrade -r requirements_dev.txt
+	pip install --upgrade --editable .[dev,doc]
 	pip freeze
 
 
@@ -52,18 +53,16 @@ testall:
 
 # DOC: Run tests for the currently installed version
 test:
-	# imp warning is a PendingDeprecationWarning for Python 3.4 and Python 3.5
-	# and a DeprecationWarning for later versions.
-	# Change PendingDeprecationWarning to distutils modules when dropping
-	# support for Python 3.4.
 	python \
 		-b \
+		-X dev \
 		-Werror \
-		-Wdefault:"'U' mode is deprecated":DeprecationWarning:site: \
 		-Wdefault:"the imp module is deprecated in favour of importlib; see the module's documentation for alternative uses":DeprecationWarning:distutils: \
-		-Wdefault:"the imp module is deprecated in favour of importlib; see the module's documentation for alternative uses":PendingDeprecationWarning:: \
 		-Wdefault:"Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated, and in 3.8 it will stop working":DeprecationWarning:: \
-		-m unittest discover
+		-Wdefault:"Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3, and in 3.9 it will stop working":DeprecationWarning:: \
+		-Wdefault:"set_output_charset() is deprecated":DeprecationWarning:: \
+		-Wdefault:"parameter codeset is deprecated":DeprecationWarning:: \
+		-m unittest
 
 # DOC: Test the examples
 example-test:
@@ -74,9 +73,9 @@ example-test:
 # Note: we run the linter in two runs, because our __init__.py files has specific warnings we want to exclude
 # DOC: Perform code quality tasks
 lint:
-	$(FLAKE8) --config .flake8 --exclude $(PACKAGE)/__init__.py $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
-	$(FLAKE8) --config .flake8 --ignore F401 $(PACKAGE)/__init__.py
-	$(ISORT) --recursive --check-only --diff $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
+	$(FLAKE8) --exclude $(PACKAGE)/__init__.py $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
+	$(FLAKE8) --ignore F401 $(PACKAGE)/__init__.py
+	$(ISORT) --check-only --diff $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
 	check-manifest
 
 coverage:
@@ -89,6 +88,16 @@ coverage:
 .PHONY: test testall example-test lint coverage
 
 
+# Development
+# ===========
+
+# DOC: Generate a "tags" file
+TAGS:
+	$(CTAGS) --recurse $(PACKAGE) $(TESTS_DIR)
+
+.PHONY: TAGS
+
+
 # Documentation
 # =============
 
@@ -99,6 +108,9 @@ doc:
 
 linkcheck:
 	$(MAKE) -C $(DOC_DIR) linkcheck
+
+spelling:
+	$(MAKE) -C $(DOC_DIR) SPHINXOPTS=-W spelling
 
 # DOC: Show this help message
 help:

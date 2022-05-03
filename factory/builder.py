@@ -10,13 +10,7 @@ DeclarationWithContext = collections.namedtuple(
 )
 
 
-PostGenerationContext = collections.namedtuple(
-    'PostGenerationContext',
-    ['value_provided', 'value', 'extra'],
-)
-
-
-class DeclarationSet(object):
+class DeclarationSet:
     """A set of declarations, including the recursive parameters.
 
     Attributes:
@@ -140,18 +134,6 @@ class DeclarationSet(object):
         return '<DeclarationSet: %r>' % self.as_dict()
 
 
-class FakePostGenerationDeclaration(declarations.PostGenerationDeclaration):
-    """A fake post-generation declaration, providing simply a hardcoded value.
-
-    Used to disable post-generation when the user has overridden a method.
-    """
-    def __init__(self, value):
-        self.value = value
-
-    def call(self, instance, step, context):
-        return self.value
-
-
 def parse_declarations(decls, base_pre=None, base_post=None):
     pre_declarations = base_pre.copy() if base_pre else DeclarationSet()
     post_declarations = base_post.copy() if base_post else DeclarationSet()
@@ -174,6 +156,10 @@ def parse_declarations(decls, base_pre=None, base_post=None):
             # Set it as `key__`
             magic_key = post_declarations.join(k, '')
             extra_post[magic_key] = v
+        elif k in pre_declarations and isinstance(
+            pre_declarations[k].declaration, declarations.Transformer
+        ):
+            extra_maybenonpost[k] = pre_declarations[k].declaration.function(v)
         else:
             extra_maybenonpost[k] = v
 
@@ -181,24 +167,22 @@ def parse_declarations(decls, base_pre=None, base_post=None):
     post_declarations.update(extra_post)
 
     # Fill in extra post-declaration context
+    extra_pre_declarations = {}
+    extra_post_declarations = {}
     post_overrides = post_declarations.filter(extra_maybenonpost)
-    post_declarations.update({
-        k: v
-        for k, v in extra_maybenonpost.items()
-        if k in post_overrides
-    })
-
-    # Anything else is pre_declarations
-    pre_declarations.update({
-        k: v
-        for k, v in extra_maybenonpost.items()
-        if k not in post_overrides
-    })
+    for k, v in extra_maybenonpost.items():
+        if k in post_overrides:
+            extra_post_declarations[k] = v
+        else:
+            # Anything else is pre_declarations
+            extra_pre_declarations[k] = v
+    pre_declarations.update(extra_pre_declarations)
+    post_declarations.update(extra_post_declarations)
 
     return pre_declarations, post_declarations
 
 
-class BuildStep(object):
+class BuildStep:
     def __init__(self, builder, sequence, parent_step=None):
         self.builder = builder
         self.sequence = sequence
@@ -225,11 +209,19 @@ class BuildStep(object):
         return (self.stub,) + parent_chain
 
     def recurse(self, factory, declarations, force_sequence=None):
+        from . import base
+        if not issubclass(factory, base.BaseFactory):
+            raise errors.AssociatedClassError(
+                "%r: Attempting to recursing into a non-factory object %r"
+                % (self, factory))
         builder = self.builder.recurse(factory._meta, declarations)
         return builder.build(parent_step=self, force_sequence=force_sequence)
 
+    def __repr__(self):
+        return f"<BuildStep for {self.builder!r}>"
 
-class StepBuilder(object):
+
+class StepBuilder:
     """A factory instantiation step.
 
     Attributes:
@@ -278,21 +270,10 @@ class StepBuilder(object):
         postgen_results = {}
         for declaration_name in post.sorted():
             declaration = post[declaration_name]
-            unrolled_context = declaration.declaration.unroll_context(
+            postgen_results[declaration_name] = declaration.declaration.evaluate_post(
                 instance=instance,
                 step=step,
-                context=declaration.context,
-            )
-
-            postgen_context = PostGenerationContext(
-                value_provided='' in unrolled_context,
-                value=unrolled_context.get(''),
-                extra={k: v for k, v in unrolled_context.items() if k != ''},
-            )
-            postgen_results[declaration_name] = declaration.declaration.call(
-                instance=instance,
-                step=step,
-                context=postgen_context,
+                overrides=declaration.context,
             )
         self.factory_meta.use_postgeneration_results(
             instance=instance,
@@ -305,8 +286,11 @@ class StepBuilder(object):
         """Recurse into a sub-factory call."""
         return self.__class__(factory_meta, extras, strategy=self.strategy)
 
+    def __repr__(self):
+        return f"<StepBuilder({self.factory_meta!r}, strategy={self.strategy!r})>"
 
-class Resolver(object):
+
+class Resolver:
     """Resolve a set of declarations.
 
     Attributes are set at instantiation time, values are computed lazily.
@@ -359,16 +343,10 @@ class Resolver(object):
             if enums.get_builder_phase(value) == enums.BuilderPhase.ATTRIBUTE_RESOLUTION:
                 self.__pending.append(name)
                 try:
-                    context = value.unroll_context(
+                    value = value.evaluate_pre(
                         instance=self,
                         step=self.__step,
-                        context=declaration.context,
-                    )
-
-                    value = value.evaluate(
-                        instance=self,
-                        step=self.__step,
-                        extra=context,
+                        overrides=declaration.context,
                     )
                 finally:
                     last = self.__pending.pop()
@@ -384,6 +362,6 @@ class Resolver(object):
     def __setattr__(self, name, value):
         """Prevent setting attributes once __init__ is done."""
         if not self.__initialized:
-            return super(Resolver, self).__setattr__(name, value)
+            return super().__setattr__(name, value)
         else:
             raise AttributeError('Setting of object attributes is not allowed')

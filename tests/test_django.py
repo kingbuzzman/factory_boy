@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 """Tests for factory_boy/Django interactions."""
@@ -6,28 +5,23 @@
 import io
 import os
 import unittest
+from unittest import mock
 
 import django
 from django import test as django_test
 from django.conf import settings
+from django.contrib.auth.hashers import check_password
 from django.db.models import signals
 from django.test import utils as django_test_utils
-from django.test.runner import DiscoverRunner as DjangoTestSuiteRunner
 
-import factory
+import factory.django
 
 from . import testdata
-from .compat import mock
 
 try:
     from PIL import Image
 except ImportError:
-    # Try PIL alternate name
-    try:
-        import Image
-    except ImportError:
-        # OK, not installed
-        Image = None
+    Image = None
 
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
@@ -40,18 +34,12 @@ test_state = {}
 
 def setUpModule():
     django_test_utils.setup_test_environment()
-    runner = DjangoTestSuiteRunner()
-    runner_state = runner.setup_databases()
-    test_state.update({
-        'runner': runner,
-        'runner_state': runner_state,
-    })
+    runner_state = django_test_utils.setup_databases(verbosity=0, interactive=False)
+    test_state['runner_state'] = runner_state
 
 
 def tearDownModule():
-    runner = test_state['runner']
-    runner_state = test_state['runner_state']
-    runner.teardown_databases(runner_state)
+    django_test_utils.teardown_databases(test_state['runner_state'], verbosity=0)
     django_test_utils.teardown_test_environment()
 
 
@@ -108,6 +96,16 @@ class AbstractSonFactory(AbstractBaseFactory):
 class ConcreteGrandSonFactory(AbstractBaseFactory):
     class Meta:
         model = models.ConcreteGrandSon
+
+
+PASSWORD = 's0_s3cr3t'
+
+
+class WithPasswordFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.WithPassword
+
+    pw = factory.django.Password(password=PASSWORD)
 
 
 class WithFileFactory(factory.django.DjangoModelFactory):
@@ -168,7 +166,7 @@ class ModelTests(django_test.TestCase):
 
 class DjangoPkSequenceTestCase(django_test.TestCase):
     def setUp(self):
-        super(DjangoPkSequenceTestCase, self).setUp()
+        super().setUp()
         StandardFactory.reset_sequence()
 
     def test_pk_first(self):
@@ -209,7 +207,14 @@ class DjangoGetOrCreateTests(django_test.TestCase):
         MultifieldModelFactory(slug='alt')
 
         self.assertEqual(obj1, obj2)
-        self.assertEqual(2, models.MultifieldModel.objects.count())
+        self.assertEqual(
+            list(
+                models.MultifieldModel.objects.order_by("slug").values_list(
+                    "slug", flat=True
+                )
+            ),
+            ["alt", "slug1"],
+        )
 
     def test_missing_arg(self):
         with self.assertRaises(factory.FactoryError):
@@ -222,7 +227,14 @@ class DjangoGetOrCreateTests(django_test.TestCase):
         )
         self.assertEqual(6, len(objs))
         self.assertEqual(2, len(set(objs)))
-        self.assertEqual(2, models.MultifieldModel.objects.count())
+        self.assertEqual(
+            list(
+                models.MultifieldModel.objects.order_by("slug").values_list(
+                    "slug", flat=True
+                )
+            ),
+            ["alt", "main"],
+        )
 
 
 class MultipleGetOrCreateFieldsTest(django_test.TestCase):
@@ -244,7 +256,7 @@ class MultipleGetOrCreateFieldsTest(django_test.TestCase):
 
 class DjangoPkForceTestCase(django_test.TestCase):
     def setUp(self):
-        super(DjangoPkForceTestCase, self).setUp()
+        super().setUp()
         StandardFactoryWithPKField.reset_sequence()
 
     def test_no_pk(self):
@@ -328,7 +340,7 @@ class DjangoModelLoadingTestCase(django_test.TestCase):
 
 class DjangoNonIntegerPkTestCase(django_test.TestCase):
     def setUp(self):
-        super(DjangoNonIntegerPkTestCase, self).setUp()
+        super().setUp()
         NonIntegerPkFactory.reset_sequence()
 
     def test_first(self):
@@ -394,7 +406,7 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(DjangoRelatedFieldTestCase, cls).setUpClass()
+        super().setUpClass()
 
         class PointedFactory(factory.django.DjangoModelFactory):
             class Meta:
@@ -408,7 +420,13 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
             pointed = factory.SubFactory(PointedFactory, foo='new_foo')
 
         class PointedRelatedFactory(PointedFactory):
-            pointer = factory.RelatedFactory(PointerFactory, 'pointed')
+            pointer = factory.RelatedFactory(
+                PointerFactory,
+                factory_related_name='pointed',
+            )
+
+            class Meta:
+                skip_postgeneration_save = True
 
         class PointerExtraFactory(PointerFactory):
             pointed__foo = 'extra_new_foo'
@@ -419,8 +437,15 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
         class PointedRelatedWithTraitFactory(PointedFactory):
             class Params:
                 with_pointer = factory.Trait(
-                    pointer=factory.RelatedFactory(PointerFactory, 'pointed', bar='with_trait')
+                    pointer=factory.RelatedFactory(
+                        PointerFactory,
+                        factory_related_name='pointed',
+                        bar='with_trait',
+                    )
                 )
+
+            class Meta:
+                skip_postgeneration_save = True
 
         cls.PointedFactory = PointedFactory
         cls.PointerFactory = PointerFactory
@@ -484,10 +509,25 @@ class DjangoRelatedFieldTestCase(django_test.TestCase):
         self.assertEqual(pointed.pointer.bar, 'with_trait')
 
 
+class DjangoPasswordTestCase(django_test.TestCase):
+    def test_build(self):
+        u = WithPasswordFactory.build()
+        self.assertTrue(check_password(PASSWORD, u.pw))
+
+    def test_build_with_kwargs(self):
+        password = 'V3R¥.S€C®€T'
+        u = WithPasswordFactory.build(pw=password)
+        self.assertTrue(check_password(password, u.pw))
+
+    def test_create(self):
+        u = WithPasswordFactory.create()
+        self.assertTrue(check_password(PASSWORD, u.pw))
+
+
 class DjangoFileFieldTestCase(django_test.TestCase):
 
     def tearDown(self):
-        super(DjangoFileFieldTestCase, self).tearDown()
+        super().tearDown()
         for path in os.listdir(models.WITHFILE_UPLOAD_DIR):
             # Remove temporary files written during tests.
             os.unlink(os.path.join(models.WITHFILE_UPLOAD_DIR, path))
@@ -664,7 +704,7 @@ class DjangoFakerTestCase(django_test.TestCase):
 class DjangoImageFieldTestCase(django_test.TestCase):
 
     def tearDown(self):
-        super(DjangoImageFieldTestCase, self).tearDown()
+        super().tearDown()
         for path in os.listdir(models.WITHFILE_UPLOAD_DIR):
             # Remove temporary files written during tests.
             os.unlink(os.path.join(models.WITHFILE_UPLOAD_DIR, path))
@@ -712,6 +752,16 @@ class DjangoImageFieldTestCase(django_test.TestCase):
         # 169 pixels with rgb(254, 0, 0)
         self.assertEqual([(169, (254, 0, 0))], colors)
         self.assertEqual('JPEG', i.format)
+
+    def test_rgba_image(self):
+        o = WithImageFactory.create(
+            animage__palette='RGBA',
+            animage__format='PNG',
+        )
+        self.assertIsNotNone(o.pk)
+
+        with Image.open(os.path.join(settings.MEDIA_ROOT, o.animage.name)) as i:
+            self.assertEqual('RGBA', i.mode)
 
     def test_gif(self):
         o = WithImageFactory.build(animage__width=13, animage__color='blue', animage__format='GIF')
@@ -859,6 +909,16 @@ class PreventSignalsTestCase(django_test.TestCase):
 
         self.assertSignalsReactivated()
 
+    def test_receiver_created_during_model_instantiation_is_not_lost(self):
+        with factory.django.mute_signals(signals.post_save):
+            instance = WithSignalsFactory(post_save_signal_receiver=self.handlers.created_during_instantiation)
+            self.assertTrue(self.handlers.created_during_instantiation.called)
+
+        self.handlers.created_during_instantiation.reset_mock()
+        instance.save()
+
+        self.assertTrue(self.handlers.created_during_instantiation.called)
+
     def test_signal_cache(self):
         with factory.django.mute_signals(signals.pre_save, signals.post_save):
             signals.post_save.connect(self.handlers.mute_block_receiver)
@@ -891,6 +951,7 @@ class PreventSignalsTestCase(django_test.TestCase):
         class WithSignalsDecoratedFactory(factory.django.DjangoModelFactory):
             class Meta:
                 model = models.WithSignals
+                skip_postgeneration_save = True
 
             @factory.post_generation
             def post(obj, create, extracted, **kwargs):
@@ -935,7 +996,7 @@ class PreventSignalsTestCase(django_test.TestCase):
         self.assertSignalsReactivated()
 
     def test_classmethod_decorator(self):
-        class Foo(object):
+        class Foo:
             @classmethod
             @factory.django.mute_signals(signals.pre_save, signals.post_save)
             def generate(cls):
@@ -977,6 +1038,7 @@ class PreventChainedSignalsTestCase(django_test.TestCase):
         class UndecoratedFactory(factory.django.DjangoModelFactory):
             class Meta:
                 model = models.PointerModel
+                skip_postgeneration_save = True
             pointed = factory.RelatedFactory(self.WithSignalsDecoratedFactory)
 
         UndecoratedFactory()
@@ -997,3 +1059,28 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         # Our CustomManager will remove the 'arg=' argument,
         # invalid for the actual model.
         ObjFactory.create(arg='invalid')
+
+
+class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
+    class StandardFactoryWithPost(StandardFactory):
+        @factory.post_generation
+        def post_action(obj, create, extracted, **kwargs):
+            return 3
+
+    def test_create_warning(self):
+        with self.assertWarns(DeprecationWarning) as cm:
+            self.StandardFactoryWithPost.create()
+
+        [msg] = cm.warning.args
+        self.assertEqual(
+            msg,
+            "StandardFactoryWithPost._after_postgeneration will stop saving the "
+            "instance after postgeneration hooks in the next major release.\n"
+            "If the save call is extraneous, set skip_postgeneration_save=True in the "
+            "StandardFactoryWithPost.Meta.\n"
+            "To keep saving the instance, move the save call to your postgeneration "
+            "hooks or override _after_postgeneration.",
+        )
+
+    def test_build_no_warning(self):
+        self.StandardFactoryWithPost.build()

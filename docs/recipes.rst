@@ -80,7 +80,11 @@ use a :class:`~factory.RelatedFactory` declaration:
         class Meta:
             model = models.User
 
-        log = factory.RelatedFactory(UserLogFactory, 'user', action=models.UserLog.ACTION_CREATE)
+        log = factory.RelatedFactory(
+            UserLogFactory,
+            factory_related_name='user',
+            action=models.UserLog.ACTION_CREATE,
+        )
 
 
 When a :class:`UserFactory` is instantiated, factory_boy will call
@@ -102,6 +106,8 @@ Since version 2.9, the :meth:`~factory.django.mute_signals` decorator should be 
 
 .. code-block:: python
 
+    from django.db.models.signals import post_save
+    
     @factory.django.mute_signals(post_save)
     class ProfileFactory(factory.django.DjangoModelFactory):
         class Meta:
@@ -121,21 +127,25 @@ Since version 2.9, the :meth:`~factory.django.mute_signals` decorator should be 
 
         # We pass in 'user' to link the generated Profile to our just-generated User
         # This will call ProfileFactory(user=our_new_user), thus skipping the SubFactory.
-        profile = factory.RelatedFactory(ProfileFactory, 'user')
+        profile = factory.RelatedFactory(ProfileFactory, factory_related_name='user')
 
 .. OHAI_VIM:*
 
 
 .. code-block:: pycon
 
-    >>> u = UserFactory(profile__title=u"Lord")
+    >>> u = UserFactory(profile__title="Lord")
     >>> u.get_profile().title
-    u"Lord"
+    "Lord"
 
-Such behaviour can be extended to other situations where a signal interferes with
+Such behavior can be extended to other situations where a signal interferes with
 factory_boy related factories.
 
 Any factories that call these classes with :class:`~factory.SubFactory` will also need to be decorated in the same manner.
+
+..
+   _DEPRECATED: Release 4.0: post_generation and RelatedFactory will stop
+                issuing calls to save(). Refs issues 316 and 366.
 
 .. note:: When any :class:`~factory.RelatedFactory` or :class:`~factory.post_generation`
           attribute is defined on the :class:`~factory.django.DjangoModelFactory` subclass,
@@ -181,14 +191,12 @@ hook:
 
         @factory.post_generation
         def groups(self, create, extracted, **kwargs):
-            if not create:
-                # Simple build, do nothing.
+            if not create or not extracted:
+                # Simple build, or nothing to add, do nothing.
                 return
 
-            if extracted:
-                # A list of groups were passed in, use them
-                for group in extracted:
-                    self.groups.add(group)
+            # Add the iterable of groups using bulk addition
+            self.groups.add(*extracted)
 
 .. OHAI_VIM**
 
@@ -199,6 +207,8 @@ But when ``UserFactory.create(groups=(group1, group2, group3))`` is called,
 the ``groups`` declaration will add passed in groups to the set of groups for the
 user.
 
+For SQLAlchemy, change ``self.groups.add(group)`` in the above example to
+``self.groups.append(group)``.
 
 Many-to-many relation with a 'through'
 --------------------------------------
@@ -245,11 +255,22 @@ If more links are needed, simply add more :class:`RelatedFactory` declarations:
         rank = 1
 
     class UserWithGroupFactory(UserFactory):
-        membership = factory.RelatedFactory(GroupLevelFactory, 'user')
+        membership = factory.RelatedFactory(
+            GroupLevelFactory,
+            factory_related_name='user',
+        )
 
     class UserWith2GroupsFactory(UserFactory):
-        membership1 = factory.RelatedFactory(GroupLevelFactory, 'user', group__name='Group1')
-        membership2 = factory.RelatedFactory(GroupLevelFactory, 'user', group__name='Group2')
+        membership1 = factory.RelatedFactory(
+            GroupLevelFactory,
+            factory_related_name='user',
+            group__name='Group1',
+        )
+        membership2 = factory.RelatedFactory(
+            GroupLevelFactory,
+            factory_related_name='user',
+            group__name='Group2',
+        )
 
 
 Whenever the ``UserWithGroupFactory`` is called, it will, as a post-generation hook,
@@ -294,8 +315,8 @@ When a field of a related class should match one of the container:
 
 Here, we want:
 
-- The User to have the lang of its country (``factory.SelfAttribute('country.lang')``)
-- The Company owner to live in the country of the company (``factory.SelfAttribute('..country')``)
+- The ``User`` to have the ``lang`` of its country (``factory.SelfAttribute('country.lang')``)
+- The ``Company`` owner to live in the country of the company (``factory.SelfAttribute('..country')``)
 
 .. code-block:: python
 
@@ -341,7 +362,7 @@ This time, we want the company owner to live in a country neighboring the countr
 Custom manager methods
 ----------------------
 
-Sometimes you need a factory to call a specific manager method other then the
+Sometimes you need a factory to call a specific manager method other than the
 default :meth:`Model.objects.create() <django.db.models.query.QuerySet.create>` method:
 
 .. code-block:: python
@@ -369,7 +390,7 @@ A common pattern with factory_boy is to use a :class:`factory.Sequence` declarat
 to provide varying values to attributes declared as unique.
 
 However, it is sometimes useful to force a given value to the counter, for instance
-to ensure that tests are properly reproductible.
+to ensure that tests are properly reproducible.
 
 factory_boy provides a few hooks for this:
 
@@ -431,7 +452,7 @@ Forcing the initial value for all projects
     The sequence counter of a :class:`~factory.Factory` can also be set
     automatically upon the first call through the
     :meth:`~factory.Factory._setup_next_sequence` method; this helps when the
-    objects's attributes mustn't conflict with pre-existing data.
+    objects' attributes mustn't conflict with preexisting data.
 
     A typical example is to ensure that running a Python script twice will create
     non-conflicting objects, by setting up the counter to "max used value plus one":
@@ -460,7 +481,7 @@ Forcing the initial value for all projects
 Using reproducible randomness
 -----------------------------
 
-Although using random values is great, it can provoke test flakyness.
+Although using random values is great, it can provoke test flakiness.
 factory_boy provides a few helpers for this.
 
 .. note:: Those methods will seed the random engine used in both :class:`factory.Faker` and :mod:`factory.fuzzy` objects.
@@ -483,7 +504,7 @@ Reproducing unseeded tests
     For such cases, use a combination of :meth:`factory.random.get_random_state()`
     and :meth:`factory.random.set_random_state()`.
 
-    Since the random state structure is implementation-specific, we recommand passing it around
+    Since the random state structure is implementation-specific, we recommend passing it around
     as a base64-encoded pickle dump.
 
     .. code-block:: python
@@ -528,13 +549,13 @@ In order to get a dict, we'll just have to swap the model; the easiest way is to
         class Meta:
             model = models.User
 
-        first_name = factory.Sequence(lambda n: "Agent %03d" % n)
+        first_name = factory.Sequence(lambda n: "Agent %03d" % n)  # Agent 000, Agent 001, Agent 002
         username = factory.Faker('user_name')
 
 .. code-block:: pycon
 
     >>> factory.build(dict, FACTORY_CLASS=UserFactory)
-    {'first_name': "Agent 001", 'username': 'john_doe'}
+    {'first_name': "Agent 000", 'username': 'john_doe'}
 
 
 Fuzzying Django model field choices

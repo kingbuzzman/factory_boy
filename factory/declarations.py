@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
-from __future__ import unicode_literals
 
 import itertools
 import logging
+import typing as T
 
-from . import compat, enums, errors, utils
+from . import enums, errors, utils
 
 logger = logging.getLogger('factory.generate')
 
@@ -25,16 +24,28 @@ class BaseDeclaration(utils.OrderedBase):
     #: Set to False on declarations that perform their own unrolling.
     UNROLL_CONTEXT_BEFORE_EVALUATION = True
 
+    def __init__(self, **defaults):
+        super().__init__()
+        self._defaults = defaults or {}
+
     def unroll_context(self, instance, step, context):
+        full_context = dict()
+        full_context.update(self._defaults)
+        full_context.update(context)
+
         if not self.UNROLL_CONTEXT_BEFORE_EVALUATION:
-            return context
-        if not any(enums.get_builder_phase(v) for v in context.values()):
+            return full_context
+        if not any(enums.get_builder_phase(v) for v in full_context.values()):
             # Optimization for simple contexts - don't do anything.
-            return context
+            return full_context
 
         import factory.base
         subfactory = factory.base.DictFactory
-        return step.recurse(subfactory, context, force_sequence=step.sequence)
+        return step.recurse(subfactory, full_context, force_sequence=step.sequence)
+
+    def evaluate_pre(self, instance, step, overrides):
+        context = self.unroll_context(instance, step, overrides)
+        return self.evaluate(instance, step, context)
 
     def evaluate(self, instance, step, extra):
         """Evaluate this declaration.
@@ -63,12 +74,12 @@ class LazyFunction(BaseDeclaration):
             returning the computed value.
     """
 
-    def __init__(self, function, *args, **kwargs):
-        super(LazyFunction, self).__init__(*args, **kwargs)
+    def __init__(self, function):
+        super().__init__()
         self.function = function
 
     def evaluate(self, instance, step, extra):
-        logger.debug("LazyFunction: Evaluating %s on %s", utils.log_repr(self.function), utils.log_repr(step))
+        logger.debug("LazyFunction: Evaluating %r on %r", self.function, step)
         return self.function()
 
 
@@ -80,16 +91,32 @@ class LazyAttribute(BaseDeclaration):
             returning the computed value.
     """
 
-    def __init__(self, function, *args, **kwargs):
-        super(LazyAttribute, self).__init__(*args, **kwargs)
+    def __init__(self, function):
+        super().__init__()
         self.function = function
 
     def evaluate(self, instance, step, extra):
-        logger.debug("LazyAttribute: Evaluating %s on %s", utils.log_repr(self.function), utils.log_repr(instance))
+        logger.debug("LazyAttribute: Evaluating %r on %r", self.function, instance)
         return self.function(instance)
 
 
-class _UNSPECIFIED(object):
+class Transformer(LazyFunction):
+    """Transform value using given function.
+
+    Attributes:
+        transform (function): returns the transformed value.
+        value: passed as the first argument to the transform function.
+    """
+
+    def __init__(self, transform, value, *args, **kwargs):
+        super().__init__(transform, *args, **kwargs)
+        self.value = value
+
+    def evaluate(self, instance, step, extra):
+        return self.function(self.value)
+
+
+class _UNSPECIFIED:
     pass
 
 
@@ -135,8 +162,8 @@ class SelfAttribute(BaseDeclaration):
             exist.
     """
 
-    def __init__(self, attribute_name, default=_UNSPECIFIED, *args, **kwargs):
-        super(SelfAttribute, self).__init__(*args, **kwargs)
+    def __init__(self, attribute_name, default=_UNSPECIFIED):
+        super().__init__()
         depth = len(attribute_name) - len(attribute_name.lstrip('.'))
         attribute_name = attribute_name[depth:]
 
@@ -151,7 +178,7 @@ class SelfAttribute(BaseDeclaration):
         else:
             target = instance
 
-        logger.debug("SelfAttribute: Picking attribute %r on %s", self.attribute_name, utils.log_repr(target))
+        logger.debug("SelfAttribute: Picking attribute %r on %r", self.attribute_name, target)
         return deepgetattr(target, self.attribute_name, self.default)
 
     def __repr__(self):
@@ -173,7 +200,7 @@ class Iterator(BaseDeclaration):
     """
 
     def __init__(self, iterator, cycle=True, getter=None):
-        super(Iterator, self).__init__()
+        super().__init__()
         self.getter = getter
         self.iterator = None
 
@@ -188,7 +215,7 @@ class Iterator(BaseDeclaration):
         if self.iterator is None:
             self.iterator = self.iterator_builder()
 
-        logger.debug("Iterator: Fetching next value from %s", utils.log_repr(self.iterator))
+        logger.debug("Iterator: Fetching next value from %r", self.iterator)
         value = next(iter(self.iterator))
         if self.getter is None:
             return value
@@ -210,7 +237,7 @@ class Sequence(BaseDeclaration):
             and returning the computed value.
     """
     def __init__(self, function):
-        super(Sequence, self).__init__()
+        super().__init__()
         self.function = function
 
     def evaluate(self, instance, step, extra):
@@ -229,8 +256,8 @@ class LazyAttributeSequence(Sequence):
     """
     def evaluate(self, instance, step, extra):
         logger.debug(
-            "LazyAttributeSequence: Computing next value of %r for seq=%s, obj=%s",
-            self.function, step.sequence, utils.log_repr(instance))
+            "LazyAttributeSequence: Computing next value of %r for seq=%s, obj=%r",
+            self.function, step.sequence, instance)
         return self.function(instance, int(step.sequence))
 
 
@@ -243,8 +270,8 @@ class ContainerAttribute(BaseDeclaration):
         strict (bool): Whether evaluating should fail when the containers are
             not passed in (i.e used outside a SubFactory).
     """
-    def __init__(self, function, strict=True, *args, **kwargs):
-        super(ContainerAttribute, self).__init__(*args, **kwargs)
+    def __init__(self, function, strict=True):
+        super().__init__()
         self.function = function
         self.strict = strict
 
@@ -274,27 +301,7 @@ class ParameteredAttribute(BaseDeclaration):
     Attributes:
         defaults (dict): Default values for the parameters.
             May be overridden by call-time parameters.
-
-    Class attributes:
-        CONTAINERS_FIELD (str): name of the field, if any, where container
-            information (e.g for SubFactory) should be stored. If empty,
-            containers data isn't merged into generate() parameters.
     """
-
-    CONTAINERS_FIELD = '__containers'
-
-    # Whether to add the current object to the stack of containers
-    EXTEND_CONTAINERS = False
-
-    def __init__(self, **kwargs):
-        super(ParameteredAttribute, self).__init__()
-        self.defaults = kwargs
-
-    def _prepare_containers(self, obj, containers=()):
-        if self.EXTEND_CONTAINERS:
-            return (obj,) + tuple(containers)
-
-        return containers
 
     def evaluate(self, instance, step, extra):
         """Evaluate the current definition and fill its attributes.
@@ -310,11 +317,7 @@ class ParameteredAttribute(BaseDeclaration):
             extra (dict): additional, call-time added kwargs
                 for the step.
         """
-        defaults = dict(self.defaults)
-        if extra:
-            defaults.update(extra)
-
-        return self.generate(step, defaults)
+        return self.generate(step, extra)
 
     def generate(self, step, params):
         """Actually generate the related attribute.
@@ -333,7 +336,7 @@ class ParameteredAttribute(BaseDeclaration):
         raise NotImplementedError()
 
 
-class _FactoryWrapper(object):
+class _FactoryWrapper:
     """Handle a 'factory' arg.
 
     Such args can be either a Factory subclass, or a fully qualified import
@@ -345,7 +348,7 @@ class _FactoryWrapper(object):
         if isinstance(factory_or_path, type):
             self.factory = factory_or_path
         else:
-            if not (compat.is_string(factory_or_path) and '.' in factory_or_path):
+            if not (isinstance(factory_or_path, str) and '.' in factory_or_path):
                 raise ValueError(
                     "A factory= argument must receive either a class "
                     "or the fully qualified path to a Factory subclass; got "
@@ -362,12 +365,12 @@ class _FactoryWrapper(object):
 
     def __repr__(self):
         if self.factory is None:
-            return '<_FactoryImport: %s.%s>' % (self.module, self.name)
+            return f'<_FactoryImport: {self.module}.{self.name}>'
         else:
-            return '<_FactoryImport: %s>' % self.factory.__class__
+            return f'<_FactoryImport: {self.factory.__class__}>'
 
 
-class SubFactory(ParameteredAttribute):
+class SubFactory(BaseDeclaration):
     """Base class for attributes based upon a sub-factory.
 
     Attributes:
@@ -376,19 +379,20 @@ class SubFactory(ParameteredAttribute):
         factory (base.Factory): the wrapped factory
     """
 
-    EXTEND_CONTAINERS = True
+    # Whether to align the attribute's sequence counter to the holding
+    # factory's sequence counter
     FORCE_SEQUENCE = False
     UNROLL_CONTEXT_BEFORE_EVALUATION = False
 
     def __init__(self, factory, **kwargs):
-        super(SubFactory, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.factory_wrapper = _FactoryWrapper(factory)
 
     def get_factory(self):
         """Retrieve the wrapped factory.Factory subclass."""
         return self.factory_wrapper.get()
 
-    def generate(self, step, params):
+    def evaluate(self, instance, step, extra):
         """Evaluate the current definition and fill its attributes.
 
         Args:
@@ -400,11 +404,11 @@ class SubFactory(ParameteredAttribute):
         logger.debug(
             "SubFactory: Instantiating %s.%s(%s), create=%r",
             subfactory.__module__, subfactory.__name__,
-            utils.log_pprint(kwargs=params),
+            utils.log_pprint(kwargs=extra),
             step,
         )
         force_sequence = step.sequence if self.FORCE_SEQUENCE else None
-        return step.recurse(subfactory, params, force_sequence=force_sequence)
+        return step.recurse(subfactory, extra, force_sequence=force_sequence)
 
 
 class Dict(SubFactory):
@@ -413,7 +417,7 @@ class Dict(SubFactory):
     FORCE_SEQUENCE = True
 
     def __init__(self, params, dict_factory='factory.DictFactory'):
-        super(Dict, self).__init__(dict_factory, **dict(params))
+        super().__init__(dict_factory, **dict(params))
 
 
 class List(SubFactory):
@@ -422,20 +426,17 @@ class List(SubFactory):
     FORCE_SEQUENCE = True
 
     def __init__(self, params, list_factory='factory.ListFactory'):
-        params = dict((str(i), v) for i, v in enumerate(params))
-        super(List, self).__init__(list_factory, **params)
+        params = {str(i): v for i, v in enumerate(params)}
+        super().__init__(list_factory, **params)
 
 
 # Parameters
 # ==========
 
 
-class Skip(object):
+class Skip:
     def __bool__(self):
         return False
-
-    # Py2 compatibility
-    __nonzero__ = __bool__
 
 
 SKIP = Skip()
@@ -443,17 +444,7 @@ SKIP = Skip()
 
 class Maybe(BaseDeclaration):
     def __init__(self, decider, yes_declaration=SKIP, no_declaration=SKIP):
-        super(Maybe, self).__init__()
-        phases = {
-            'yes_declaration': enums.get_builder_phase(yes_declaration),
-            'no_declaration': enums.get_builder_phase(no_declaration),
-        }
-        used_phases = set(phase for phase in phases.values() if phase is not None)
-
-        if len(used_phases) > 1:
-            raise TypeError("Inconsistent phases for %r: %r" % (self, phases))
-
-        self.FACTORY_BUILDER_PHASE = used_phases.pop() if used_phases else enums.BuilderPhase.ATTRIBUTE_RESOLUTION
+        super().__init__()
 
         if enums.get_builder_phase(decider) is None:
             # No builder phase => flat value
@@ -463,43 +454,57 @@ class Maybe(BaseDeclaration):
         self.yes = yes_declaration
         self.no = no_declaration
 
-    def call(self, instance, step, context):
+        phases = {
+            'yes_declaration': enums.get_builder_phase(yes_declaration),
+            'no_declaration': enums.get_builder_phase(no_declaration),
+        }
+        used_phases = {phase for phase in phases.values() if phase is not None}
+
+        if len(used_phases) > 1:
+            raise TypeError(f"Inconsistent phases for {self!r}: {phases!r}")
+
+        self.FACTORY_BUILDER_PHASE = used_phases.pop() if used_phases else enums.BuilderPhase.ATTRIBUTE_RESOLUTION
+
+    def evaluate_post(self, instance, step, overrides):
+        """Handle post-generation declarations"""
         decider_phase = enums.get_builder_phase(self.decider)
         if decider_phase == enums.BuilderPhase.ATTRIBUTE_RESOLUTION:
             # Note: we work on the *builder stub*, not on the actual instance.
             # This gives us access to all Params-level definitions.
-            choice = self.decider.evaluate(instance=step.stub, step=step, extra=context.extra)
+            choice = self.decider.evaluate_pre(
+                instance=step.stub, step=step, overrides=overrides)
         else:
             assert decider_phase == enums.BuilderPhase.POST_INSTANTIATION
-            choice = self.decider.call(instance, step, context)
+            choice = self.decider.evaluate_post(
+                instance=instance, step=step, overrides={})
 
         target = self.yes if choice else self.no
         if enums.get_builder_phase(target) == enums.BuilderPhase.POST_INSTANTIATION:
-            return target.call(
+            return target.evaluate_post(
                 instance=instance,
                 step=step,
-                context=context,
+                overrides=overrides,
             )
         else:
             # Flat value (can't be ATTRIBUTE_RESOLUTION, checked in __init__)
             return target
 
-    def evaluate(self, instance, step, extra):
+    def evaluate_pre(self, instance, step, overrides):
         choice = self.decider.evaluate(instance=instance, step=step, extra={})
         target = self.yes if choice else self.no
 
         if isinstance(target, BaseDeclaration):
-            return target.evaluate(
+            return target.evaluate_pre(
                 instance=instance,
                 step=step,
-                extra=extra,
+                overrides=overrides,
             )
         else:
             # Flat value (can't be POST_INSTANTIATION, checked in __init__)
             return target
 
     def __repr__(self):
-        return 'Maybe(%r, yes=%r, no=%r)' % (self.decider, self.yes, self.no)
+        return f'Maybe({self.decider!r}, yes={self.yes!r}, no={self.no!r})'
 
 
 class Parameter(utils.OrderedBase):
@@ -529,7 +534,7 @@ class Parameter(utils.OrderedBase):
 
 class SimpleParameter(Parameter):
     def __init__(self, value):
-        super(SimpleParameter, self).__init__()
+        super().__init__()
         self.value = value
 
     def as_declarations(self, field_name, declarations):
@@ -548,7 +553,7 @@ class SimpleParameter(Parameter):
 class Trait(Parameter):
     """The simplest complex parameter, it enables a bunch of new declarations based on a boolean flag."""
     def __init__(self, **overrides):
-        super(Trait, self).__init__()
+        super().__init__()
         self.overrides = overrides
 
     def as_declarations(self, field_name, declarations):
@@ -582,10 +587,25 @@ class Trait(Parameter):
 # ===============
 
 
+class PostGenerationContext(T.NamedTuple):
+    value_provided: bool
+    value: T.Any
+    extra: T.Dict[str, T.Any]
+
+
 class PostGenerationDeclaration(BaseDeclaration):
     """Declarations to be called once the model object has been generated."""
 
     FACTORY_BUILDER_PHASE = enums.BuilderPhase.POST_INSTANTIATION
+
+    def evaluate_post(self, instance, step, overrides):
+        context = self.unroll_context(instance, step, overrides)
+        postgen_context = PostGenerationContext(
+            value_provided=bool('' in context),
+            value=context.get(''),
+            extra={k: v for k, v in context.items() if k != ''},
+        )
+        return self.call(instance, step, postgen_context)
 
     def call(self, instance, step, context):  # pragma: no cover
         """Call this hook; no return value is expected.
@@ -602,7 +622,7 @@ class PostGenerationDeclaration(BaseDeclaration):
 class PostGeneration(PostGenerationDeclaration):
     """Calls a given function once the object has been generated."""
     def __init__(self, function):
-        super(PostGeneration, self).__init__()
+        super().__init__()
         self.function = function
 
     def call(self, instance, step, context):
@@ -633,7 +653,7 @@ class RelatedFactory(PostGenerationDeclaration):
     UNROLL_CONTEXT_BEFORE_EVALUATION = False
 
     def __init__(self, factory, factory_related_name='', **defaults):
-        super(RelatedFactory, self).__init__()
+        super().__init__()
 
         self.name = factory_related_name
         self.defaults = defaults
@@ -649,8 +669,8 @@ class RelatedFactory(PostGenerationDeclaration):
         if context.value_provided:
             # The user passed in a custom value
             logger.debug(
-                "RelatedFactory: Using provided %s instead of generating %s.%s.",
-                utils.log_repr(context.value),
+                "RelatedFactory: Using provided %r instead of generating %s.%s.",
+                context.value,
                 factory.__module__, factory.__name__,
             )
             return context.value
@@ -683,12 +703,14 @@ class RelatedFactoryList(RelatedFactory):
 
     def __init__(self, factory, factory_related_name='', size=2, **defaults):
         self.size = size
-        super(RelatedFactoryList, self).__init__(factory, factory_related_name, **defaults)
+        super().__init__(factory, factory_related_name, **defaults)
 
     def call(self, instance, step, context):
-        return [super(RelatedFactoryList, self).call(instance, step, context)
-                for i in range(self.size if isinstance(self.size, int)
-                               else self.size())]
+        parent = super()
+        return [
+            parent.call(instance, step, context)
+            for i in range(self.size if isinstance(self.size, int) else self.size())
+        ]
 
 
 class NotProvided:
@@ -709,7 +731,7 @@ class PostGenerationMethodCall(PostGenerationDeclaration):
             password = factory.PostGenerationMethodCall('set_pass', password='')
     """
     def __init__(self, method_name, *args, **kwargs):
-        super(PostGenerationMethodCall, self).__init__()
+        super().__init__()
         if len(args) > 1:
             raise errors.InvalidDeclarationError(
                 "A PostGenerationMethodCall can only handle 1 positional argument; "
@@ -722,18 +744,18 @@ class PostGenerationMethodCall(PostGenerationDeclaration):
     def call(self, instance, step, context):
         if not context.value_provided:
             if self.method_arg is NotProvided:
-                args = tuple()
+                args = ()
             else:
-                args = tuple([self.method_arg])
+                args = (self.method_arg,)
         else:
-            args = tuple([context.value])
+            args = (context.value,)
 
         kwargs = dict(self.method_kwargs)
         kwargs.update(context.extra)
         method = getattr(instance, self.method_name)
         logger.debug(
-            "PostGenerationMethodCall: Calling %s.%s(%s)",
-            utils.log_repr(instance),
+            "PostGenerationMethodCall: Calling %r.%s(%s)",
+            instance,
             self.method_name,
             utils.log_pprint(args, kwargs),
         )

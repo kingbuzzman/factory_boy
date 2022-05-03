@@ -99,10 +99,18 @@ This is achieved with the :class:`~factory.Sequence` declaration:
 
 .. code-block:: pycon
 
+    >>> # The sequence counter starts at 0 by default
     >>> UserFactory()
     <User: user0>
     >>> UserFactory()
     <User: user1>
+
+    >>> # A value can be provided for a sequence-driven field
+    >>> # but this still increments the sequence counter
+    >>> UserFactory(username="ada.lovelace")
+    <User: ada.lovelace>
+    >>> UserFactory()
+    <User: user3>
 
 .. note:: For more complex situations, you may also use the :meth:`~factory.@sequence` decorator (note that ``self`` is not added as first parameter):
 
@@ -116,6 +124,7 @@ This is achieved with the :class:`~factory.Sequence` declaration:
                 def username(n):
                     return 'user%d' % n
 
+    To set or reset the sequence counter see :ref:`Forcing a sequence counter <forcing-a-sequence-counter>`.
 
 LazyFunction
 ------------
@@ -137,7 +146,7 @@ argument and returning the value for the field:
     >>> LogFactory()
     <Log: log at 2016-02-12 17:02:34>
 
-    >>> # The LazyFunction can be overriden
+    >>> # The LazyFunction can be overridden
     >>> LogFactory(timestamp=now - timedelta(days=1))
     <Log: log at 2016-02-11 17:02:34>
 
@@ -165,7 +174,7 @@ taking the object being built and returning the value for the field:
 .. code-block:: pycon
 
     >>> UserFactory()
-    <User: user1 (user1@example.com)>
+    <User: user0 (user0@example.com)>
 
     >>> # The LazyAttribute handles overridden fields
     >>> UserFactory(username='john')
@@ -173,7 +182,7 @@ taking the object being built and returning the value for the field:
 
     >>> # They can be directly overridden as well
     >>> UserFactory(email='doe@example.com')
-    <User: user3 (doe@example.com)>
+    <User: user2 (doe@example.com)>
 
 
 .. note:: As for :class:`~factory.Sequence`, a :meth:`~factory.@lazy_attribute` decorator is available:
@@ -266,8 +275,8 @@ This is handled by the :data:`~factory.FactoryOptions.inline_args` attribute:
     <MyClass(1, 4, z=3)>
 
 
-Altering a factory's behaviour: parameters and traits
------------------------------------------------------
+Altering a factory's behavior: parameters and traits
+----------------------------------------------------
 
 Some classes are better described with a few, simple parameters, that aren't fields on the actual model.
 In that case, use a :attr:`~factory.Factory.Params` declaration:

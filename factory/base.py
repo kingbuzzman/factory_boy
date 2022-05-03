@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
-from __future__ import unicode_literals
 
 import collections
 import logging
@@ -43,7 +41,7 @@ class FactoryMetaClass(type):
         elif cls._meta.strategy == enums.STUB_STRATEGY:
             return cls.stub(**kwargs)
         else:
-            raise errors.UnknownStrategy('Unknown Meta.strategy: {0}'.format(
+            raise errors.UnknownStrategy('Unknown Meta.strategy: {}'.format(
                 cls._meta.strategy))
 
     def __new__(mcs, class_name, bases, attrs):
@@ -76,7 +74,7 @@ class FactoryMetaClass(type):
         meta = options_class()
         attrs['_meta'] = meta
 
-        new_class = super(FactoryMetaClass, mcs).__new__(
+        new_class = super().__new__(
             mcs, class_name, bases, attrs)
 
         meta.contribute_to_class(
@@ -93,7 +91,7 @@ class FactoryMetaClass(type):
         if cls._meta.abstract:
             return '<%s (abstract)>' % cls.__name__
         else:
-            return '<%s for %s>' % (cls.__name__, cls._meta.model)
+            return f'<{cls.__name__} for {cls._meta.model}>'
 
 
 class BaseMeta:
@@ -101,7 +99,7 @@ class BaseMeta:
     strategy = enums.CREATE_STRATEGY
 
 
-class OptionDefault(object):
+class OptionDefault:
     """The default for an option.
 
     Attributes:
@@ -136,7 +134,7 @@ class OptionDefault(object):
             self.name, self.value, self.inherit)
 
 
-class FactoryOptions(object):
+class FactoryOptions:
     def __init__(self):
         self.factory = None
         self.base_factory = None
@@ -162,8 +160,16 @@ class FactoryOptions(object):
         Custom FactoryOptions classes should override this method
         to update() its return value.
         """
+
+        def is_model(meta, value):
+            if isinstance(value, FactoryMetaClass):
+                raise TypeError(
+                    "%s is already a %s"
+                    % (repr(value), Factory.__name__)
+                )
+
         return [
-            OptionDefault('model', None, inherit=True),
+            OptionDefault('model', None, inherit=True, checker=is_model),
             OptionDefault('abstract', False, inherit=False),
             OptionDefault('strategy', enums.CREATE_STRATEGY, inherit=True),
             OptionDefault('inline_args', (), inherit=True),
@@ -176,11 +182,11 @@ class FactoryOptions(object):
         if meta is None:
             meta_attrs = {}
         else:
-            meta_attrs = dict(
-                (k, v)
+            meta_attrs = {
+                k: v
                 for (k, v) in vars(meta).items()
                 if not k.startswith('_')
-            )
+            }
 
         for option in self._build_default_options():
             assert not hasattr(self, option.name), "Can't override field %s." % option.name
@@ -370,7 +376,7 @@ class FactoryOptions(object):
         return self.model
 
     def __str__(self):
-        return "<%s for %s>" % (self.__class__.__name__, self.factory.__class__.__name__)
+        return "<%s for %s>" % (self.__class__.__name__, self.factory.__name__)
 
     def __repr__(self):
         return str(self)
@@ -379,7 +385,7 @@ class FactoryOptions(object):
 # Factory base classes
 
 
-class _Counter(object):
+class _Counter:
     """Simple, naive counter.
 
     Attributes:
@@ -399,7 +405,7 @@ class _Counter(object):
         self.seq = next_value
 
 
-class BaseFactory(object):
+class BaseFactory:
     """Factory base support for sequences, attributes and stubs."""
 
     # Backwards compatibility
@@ -435,44 +441,6 @@ class BaseFactory(object):
             int: the first available ID to use for instances of this factory.
         """
         return 0
-
-    @classmethod
-    def attributes(cls, create=False, extra=None):
-        """Build a dict of attribute values, respecting declaration order.
-
-        The process is:
-        - Handle 'orderless' attributes, overriding defaults with provided
-            kwargs when applicable
-        - Handle ordered attributes, overriding them with provided kwargs when
-            applicable; the current list of computed attributes is available
-            to the currently processed object.
-        """
-        warnings.warn(
-            "Usage of Factory.attributes() is deprecated.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        declarations = cls._meta.pre_declarations.as_dict()
-        declarations.update(extra or {})
-        from . import helpers
-        return helpers.make_factory(dict, **declarations)
-
-    @classmethod
-    def declarations(cls, extra_defs=None):
-        """Retrieve a copy of the declared attributes.
-
-        Args:
-            extra_defs (dict): additional definitions to insert into the
-                retrieved DeclarationDict.
-        """
-        warnings.warn(
-            "Factory.declarations is deprecated; use Factory._meta.pre_declarations instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        decls = cls._meta.pre_declarations.as_dict()
-        decls.update(extra_defs or {})
-        return decls
 
     @classmethod
     def _adjust_kwargs(cls, **kwargs):
@@ -539,12 +507,12 @@ class BaseFactory(object):
 
     @classmethod
     def build(cls, **kwargs):
-        """Build an instance of the associated class, with overriden attrs."""
+        """Build an instance of the associated class, with overridden attrs."""
         return cls._generate(enums.BUILD_STRATEGY, kwargs)
 
     @classmethod
     def build_batch(cls, size, **kwargs):
-        """Build a batch of instances of the given class, with overriden attrs.
+        """Build a batch of instances of the given class, with overridden attrs.
 
         Args:
             size (int): the number of instances to build
@@ -556,12 +524,12 @@ class BaseFactory(object):
 
     @classmethod
     def create(cls, **kwargs):
-        """Create an instance of the associated class, with overriden attrs."""
+        """Create an instance of the associated class, with overridden attrs."""
         return cls._generate(enums.CREATE_STRATEGY, kwargs)
 
     @classmethod
     def create_batch(cls, size, **kwargs):
-        """Create a batch of instances of the given class, with overriden attrs.
+        """Create a batch of instances of the given class, with overridden attrs.
 
         Args:
             size (int): the number of instances to create
@@ -573,7 +541,7 @@ class BaseFactory(object):
 
     @classmethod
     def stub(cls, **kwargs):
-        """Retrieve a stub of the associated class, with overriden attrs.
+        """Retrieve a stub of the associated class, with overridden attrs.
 
         This will return an object whose attributes are those defined in this
         factory's declarations or in the extra kwargs.
@@ -582,7 +550,7 @@ class BaseFactory(object):
 
     @classmethod
     def stub_batch(cls, size, **kwargs):
-        """Stub a batch of instances of the given class, with overriden attrs.
+        """Stub a batch of instances of the given class, with overridden attrs.
 
         Args:
             size (int): the number of instances to stub
@@ -659,23 +627,22 @@ class BaseFactory(object):
         return cls.generate_batch(strategy, size, **kwargs)
 
 
-# Note: we're calling str() on the class name to avoid issues with Py2's type() expecting bytes
-# instead of unicode.
-Factory = FactoryMetaClass(str('Factory'), (BaseFactory,), {
-    'Meta': BaseMeta,
-    '__doc__': """Factory base with build and create support.
+class Factory(BaseFactory, metaclass=FactoryMetaClass):
+    """Factory base with build and create support.
 
     This class has the ability to support multiple ORMs by using custom creation
     functions.
-    """,
-})
+    """
+
+    class Meta(BaseMeta):
+        pass
 
 
 # Backwards compatibility
 Factory.AssociatedClassError = errors.AssociatedClassError
 
 
-class StubObject(object):
+class StubObject:
     """A generic container."""
     def __init__(self, **kwargs):
         for field, value in kwargs.items():
@@ -730,10 +697,9 @@ class BaseListFactory(Factory):
             raise ValueError(
                 "ListFactory %r does not support Meta.inline_args." % cls)
 
-        # When support for Python <3.6 is dropped sorting will no longer be required
-        # because dictionaries will already be ordered, this can then be changed to:
-        # values = kwargs.values()
-        values = [v for k, v in sorted(kwargs.items(), key=lambda item: int(item[0]))]
+        # kwargs are constructed from a list, their insertion order matches the list
+        # order, no additional sorting is required.
+        values = kwargs.values()
         return model_class(values)
 
     @classmethod
@@ -751,6 +717,12 @@ def use_strategy(new_strategy):
 
     This is an alternative to setting default_strategy in the class definition.
     """
+    warnings.warn(
+        "use_strategy() is deprecated and will be removed in the future.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     def wrapped_class(klass):
         klass._meta.strategy = new_strategy
         return klass

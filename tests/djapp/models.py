@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 """Helpers for testing django apps."""
@@ -7,14 +6,12 @@ import os.path
 
 from django.conf import settings
 from django.db import models
+from django.db.models import signals
 
 try:
     from PIL import Image
 except ImportError:
-    try:
-        import Image
-    except ImportError:
-        Image = None
+    Image = None
 
 
 class StandardModel(models.Model):
@@ -79,6 +76,10 @@ class WithDefaultValue(models.Model):
     foo = models.CharField(max_length=20, default='')
 
 
+class WithPassword(models.Model):
+    pw = models.CharField(max_length=128)
+
+
 WITHFILE_UPLOAD_TO = 'django'
 WITHFILE_UPLOAD_DIR = os.path.join(settings.MEDIA_ROOT, WITHFILE_UPLOAD_TO)
 
@@ -101,11 +102,19 @@ else:
 class WithSignals(models.Model):
     foo = models.CharField(max_length=20)
 
+    def __init__(self, post_save_signal_receiver=None):
+        super().__init__()
+        if post_save_signal_receiver:
+            signals.post_save.connect(
+                post_save_signal_receiver,
+                sender=self.__class__,
+            )
+
 
 class CustomManager(models.Manager):
 
     def create(self, arg=None, **kwargs):
-        return super(CustomManager, self).create(**kwargs)
+        return super().create(**kwargs)
 
 
 class WithCustomManager(models.Model):

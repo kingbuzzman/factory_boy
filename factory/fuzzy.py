@@ -1,53 +1,21 @@
-# -*- coding: utf-8 -*-
 # Copyright: See the LICENSE file.
 
 
 """Additional declarations for "fuzzy" attribute definitions."""
 
-from __future__ import unicode_literals
 
 import datetime
 import decimal
 import string
 import warnings
 
-from . import compat, declarations, random
+from . import declarations, random
 
 random_seed_warning = (
     "Setting a specific random seed for {} can still have varying results "
     "unless you also set a specific end date. For details and potential solutions "
     "see https://github.com/FactoryBoy/factory_boy/issues/331"
 )
-
-
-def get_random_state():
-    warnings.warn(
-        "`factory.fuzzy.get_random_state` is deprecated. "
-        "You should use `factory.random.get_random_state` instead",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    return random.get_random_state()
-
-
-def set_random_state(state):
-    warnings.warn(
-        "`factory.fuzzy.set_random_state` is deprecated. "
-        "You should use `factory.random.set_random_state` instead",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    return random.set_random_state(state)
-
-
-def reseed_random(seed):
-    warnings.warn(
-        "`factory.fuzzy.set_random_state` is deprecated. "
-        "You should use `factory.random.reseed_random` instead",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    random.reseed_random(seed)
 
 
 class BaseFuzzyAttribute(declarations.BaseDeclaration):
@@ -71,8 +39,8 @@ class FuzzyAttribute(BaseFuzzyAttribute):
             random value.
     """
 
-    def __init__(self, fuzzer, **kwargs):
-        super(FuzzyAttribute, self).__init__(**kwargs)
+    def __init__(self, fuzzer):
+        super().__init__()
         self.fuzzer = fuzzer
 
     def fuzz(self):
@@ -96,8 +64,8 @@ class FuzzyText(BaseFuzzyAttribute):
     not important.
     """
 
-    def __init__(self, prefix='', length=12, suffix='', chars=string.ascii_letters, **kwargs):
-        super(FuzzyText, self).__init__(**kwargs)
+    def __init__(self, prefix='', length=12, suffix='', chars=string.ascii_letters):
+        super().__init__()
         self.prefix = prefix
         self.suffix = suffix
         self.length = length
@@ -117,11 +85,11 @@ class FuzzyChoice(BaseFuzzyAttribute):
         getter (callable or None): a function to parse returned values
     """
 
-    def __init__(self, choices, getter=None, **kwargs):
+    def __init__(self, choices, getter=None):
         self.choices = None
         self.choices_generator = choices
         self.getter = getter
-        super(FuzzyChoice, self).__init__(**kwargs)
+        super().__init__()
 
     def fuzz(self):
         if self.choices is None:
@@ -135,7 +103,7 @@ class FuzzyChoice(BaseFuzzyAttribute):
 class FuzzyInteger(BaseFuzzyAttribute):
     """Random integer within a given range."""
 
-    def __init__(self, low, high=None, step=1, **kwargs):
+    def __init__(self, low, high=None, step=1):
         if high is None:
             high = low
             low = 0
@@ -144,7 +112,7 @@ class FuzzyInteger(BaseFuzzyAttribute):
         self.high = high
         self.step = step
 
-        super(FuzzyInteger, self).__init__(**kwargs)
+        super().__init__()
 
     def fuzz(self):
         return random.randgen.randrange(self.low, self.high + 1, self.step)
@@ -153,7 +121,7 @@ class FuzzyInteger(BaseFuzzyAttribute):
 class FuzzyDecimal(BaseFuzzyAttribute):
     """Random decimal within a given range."""
 
-    def __init__(self, low, high=None, precision=2, **kwargs):
+    def __init__(self, low, high=None, precision=2):
         if high is None:
             high = low
             low = 0.0
@@ -162,7 +130,7 @@ class FuzzyDecimal(BaseFuzzyAttribute):
         self.high = high
         self.precision = precision
 
-        super(FuzzyDecimal, self).__init__(**kwargs)
+        super().__init__()
 
     def fuzz(self):
         base = decimal.Decimal(str(random.randgen.uniform(self.low, self.high)))
@@ -172,7 +140,7 @@ class FuzzyDecimal(BaseFuzzyAttribute):
 class FuzzyFloat(BaseFuzzyAttribute):
     """Random float within a given range."""
 
-    def __init__(self, low, high=None, precision=15, **kwargs):
+    def __init__(self, low, high=None, precision=15):
         if high is None:
             high = low
             low = 0
@@ -181,7 +149,7 @@ class FuzzyFloat(BaseFuzzyAttribute):
         self.high = high
         self.precision = precision
 
-        super(FuzzyFloat, self).__init__(**kwargs)
+        super().__init__()
 
     def fuzz(self):
         base = random.randgen.uniform(self.low, self.high)
@@ -191,8 +159,8 @@ class FuzzyFloat(BaseFuzzyAttribute):
 class FuzzyDate(BaseFuzzyAttribute):
     """Random date within a given date range."""
 
-    def __init__(self, start_date, end_date=None, **kwargs):
-        super(FuzzyDate, self).__init__(**kwargs)
+    def __init__(self, start_date, end_date=None):
+        super().__init__()
         if end_date is None:
             if random.randgen.state_set:
                 cls_name = self.__class__.__name__
@@ -229,8 +197,8 @@ class BaseFuzzyDateTime(BaseFuzzyAttribute):
     def __init__(self, start_dt, end_dt=None,
                  force_year=None, force_month=None, force_day=None,
                  force_hour=None, force_minute=None, force_second=None,
-                 force_microsecond=None, **kwargs):
-        super(BaseFuzzyDateTime, self).__init__(**kwargs)
+                 force_microsecond=None):
+        super().__init__()
 
         if end_dt is None:
             if random.randgen.state_set:
@@ -278,7 +246,7 @@ class BaseFuzzyDateTime(BaseFuzzyAttribute):
 class FuzzyNaiveDateTime(BaseFuzzyDateTime):
     """Random naive datetime within a given range.
 
-    If no upper bound is given, will default to datetime.datetime.utcnow().
+    If no upper bound is given, will default to datetime.datetime.now().
     """
 
     def _now(self):
@@ -293,7 +261,7 @@ class FuzzyNaiveDateTime(BaseFuzzyDateTime):
             raise ValueError(
                 "FuzzyNaiveDateTime only handles naive datetimes, got end=%r"
                 % end_dt)
-        super(FuzzyNaiveDateTime, self)._check_bounds(start_dt, end_dt)
+        super()._check_bounds(start_dt, end_dt)
 
 
 class FuzzyDateTime(BaseFuzzyDateTime):
@@ -304,7 +272,7 @@ class FuzzyDateTime(BaseFuzzyDateTime):
     """
 
     def _now(self):
-        return datetime.datetime.now(tz=compat.UTC)
+        return datetime.datetime.now(tz=datetime.timezone.utc)
 
     def _check_bounds(self, start_dt, end_dt):
         if start_dt.tzinfo is None:
@@ -315,4 +283,4 @@ class FuzzyDateTime(BaseFuzzyDateTime):
             raise ValueError(
                 "FuzzyDateTime requires timezone-aware datetimes, got end=%r"
                 % end_dt)
-        super(FuzzyDateTime, self)._check_bounds(start_dt, end_dt)
+        super()._check_bounds(start_dt, end_dt)
