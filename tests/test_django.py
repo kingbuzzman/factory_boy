@@ -12,7 +12,9 @@ from django import test as django_test
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db.models import signals
+from django.db import connections
 from django.test import utils as django_test_utils
+from django.core.management.color import no_style
 
 import factory.django
 
@@ -244,6 +246,12 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         std1 = StandardFactory.create(pk=10)
         self.assertEqual('foo0', std1.foo)  # sequence is unrelated to pk
         self.assertEqual(10, std1.pk)
+
+        using = StandardFactory._meta.database
+        with connections[using].cursor() as cursor:
+            sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), [StandardFactory._meta.model])
+            for command in sequence_sql:
+                cursor.execute(command)
 
         StandardFactory.reset_sequence()
         std2 = StandardFactory.create()

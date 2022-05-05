@@ -172,7 +172,7 @@ class DjangoModelFactory(base.Factory):
         if not cls.supports_bulk_insert():
             return super().create(**kwargs)
 
-        return cls.create_batch(1, **kwargs)[0]
+        return cls._bulk_create(1, **kwargs)[0]
 
     @classmethod
     def create_batch(cls, size, **kwargs):
@@ -184,7 +184,7 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
-        collector = Collector('default')
+        collector = Collector(cls._meta.database)
         collector.collect(models_to_create)
         collector.sort()
         for model_cls, objs in collector.data.items():
@@ -346,7 +346,7 @@ class Collector:
         instances = self.data[model]
         lookup = [id(instance) for instance in instances]
         for obj in objs:
-            if obj.pk:
+            if not obj._state.adding:
                 continue
             if id(obj) not in lookup:
                 new_objs.append(obj)
