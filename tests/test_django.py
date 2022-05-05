@@ -143,6 +143,53 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
+class Level2Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.Level2
+    
+    foo = factory.Sequence(lambda n: "foo%s" % n)
+
+
+class LevelA1Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.LevelA1
+    
+    level_2 = factory.SubFactory(Level2Factory)
+
+
+class LevelA2Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.LevelA2
+    
+    level_2 = factory.SubFactory(Level2Factory)
+
+
+class DjangoQueryEfficiency(django_test.TestCase):
+
+    def test_single_object_create(self):
+        with self.assertNumQueries(1):
+            Level2Factory()
+
+    def test_single_object_create_batch(self):
+        with self.assertNumQueries(1):
+            Level2Factory.create_batch(10)
+
+    def test_one_level_nested_single_object_create(self):
+        with self.assertNumQueries(2):
+            LevelA1Factory()
+
+        existing_level2 = Level2Factory()
+        with self.assertNumQueries(1):
+            LevelA1Factory(level_2=existing_level2)
+
+    def test_one_level_nested_single_object_create_batch(self):
+        with self.assertNumQueries(2):
+            LevelA1Factory.create_batch(10)
+
+        existing_level2 = Level2Factory()
+        with self.assertNumQueries(1):
+            LevelA1Factory.create_batch(10, level_2=existing_level2)
+
 class ModelTests(django_test.TestCase):
     databases = {'default', 'replica'}
 
