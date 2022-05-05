@@ -229,6 +229,13 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         super().setUp()
         StandardFactory.reset_sequence()
 
+    def reset_database_sequences(self, *models):
+        using = StandardFactory._meta.database
+        with connections[using].cursor() as cursor:
+            sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), models)
+            for command in sequence_sql:
+                cursor.execute(command)
+
     def test_pk_first(self):
         std = StandardFactory.build()
         self.assertEqual('foo0', std.foo)
@@ -240,6 +247,8 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         self.assertEqual('foo1', std2.foo)
 
     def test_pk_creation(self):
+        self.reset_database_sequences(StandardFactory._meta.model)
+
         std1 = StandardFactory.create()
         self.assertEqual('foo0', std1.foo)
         self.assertEqual(1, std1.pk)
@@ -254,11 +263,7 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         self.assertEqual('foo0', std1.foo)  # sequence is unrelated to pk
         self.assertEqual(10, std1.pk)
 
-        using = StandardFactory._meta.database
-        with connections[using].cursor() as cursor:
-            sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), [StandardFactory._meta.model])
-            for command in sequence_sql:
-                cursor.execute(command)
+        self.reset_database_sequences(StandardFactory._meta.model)
 
         StandardFactory.reset_sequence()
         std2 = StandardFactory.create()
