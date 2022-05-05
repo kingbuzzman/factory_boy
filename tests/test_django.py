@@ -434,7 +434,9 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
         self.assertEqual('foo0', nonint2.pk)
 
 
-class DjangoAbstractBaseSequenceTestCase(django_test.TestCase):
+class DjangoAbstractBaseSequenceTestCase(django_test.TransactionTestCase):
+    reset_sequences = True
+
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
         obj = ConcreteSonFactory()
