@@ -20,14 +20,14 @@ from faker import Factory as FakerFactory
 
 import factory.django
 
-faker = FakerFactory.create()
-
 from . import testdata
 
 try:
     from PIL import Image
 except ImportError:
     Image = None
+
+faker = FakerFactory.create()
 
 
 # Setup Django before importing Django models.

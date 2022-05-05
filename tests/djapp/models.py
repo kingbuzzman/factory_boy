@@ -134,6 +134,7 @@ class AbstractWithCustomManager(models.Model):
 class FromAbstractWithCustomManager(AbstractWithCustomManager):
     pass
 
+
 class Level2(models.Model):
 
     foo = models.CharField(max_length=20)

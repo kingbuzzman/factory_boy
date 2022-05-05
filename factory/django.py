@@ -323,7 +323,7 @@ class Collector:
         # parent.
         self.dependencies = defaultdict(set)  # {model: {models}}
 
-    def add(self, factory_cls, objs, source=None, nullable=False, reverse_dependency=False):
+    def add(self, objs, source=None, nullable=False, reverse_dependency=False):
         """
         Add 'objs' to the collection of objects to be deleted.  If the call is
         the result of a cascade, 'source' should be the model that caused it,
@@ -393,7 +393,7 @@ class Collector:
         can be deleted.
         """
         new_objs = self.add(
-            factory_cls, objs, source, nullable, reverse_dependency=reverse_dependency
+            objs, source, nullable, reverse_dependency=reverse_dependency
         )
         if not new_objs:
             return
@@ -425,7 +425,9 @@ class Collector:
                     collected_objs.append(val)
 
         if collected_objs:
-            new_objs = self.collect(factory_cls=factory_cls, objs=collected_objs, source=model, reverse_dependency=False)
+            new_objs = self.collect(
+                factory_cls=factory_cls, objs=collected_objs, source=model, reverse_dependency=False
+            )
 
     def sort(self):
         sorted_models = []

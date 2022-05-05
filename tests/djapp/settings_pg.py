@@ -2,7 +2,7 @@
 
 """Settings for factory_boy/Django tests."""
 
-from .settings import *
+from .settings import *  # noqa: F401, F403
 
 DATABASES = {
     'default': {
