@@ -15,6 +15,7 @@ from django.db.models import signals
 from django.db import connections
 from django.test import utils as django_test_utils
 from django.core.management.color import no_style
+from contextlib import nullcontext
 
 import factory.django
 
@@ -1124,22 +1125,25 @@ class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
-            return 3
+            obj.non_existant_field = 3
 
     def test_create_warning(self):
-        with self.assertWarns(DeprecationWarning) as cm:
-            self.StandardFactoryWithPost.create()
+        context = self.assertWarns(DeprecationWarning) if SKIP_POSTGRESDB else nullcontext()
+        with context as cm:
+            instance = self.StandardFactoryWithPost.create()
+            assert instance.non_existant_field == 3
 
-        [msg] = cm.warning.args
-        self.assertEqual(
-            msg,
-            "StandardFactoryWithPost._after_postgeneration will stop saving the "
-            "instance after postgeneration hooks in the next major release.\n"
-            "If the save call is extraneous, set skip_postgeneration_save=True in the "
-            "StandardFactoryWithPost.Meta.\n"
-            "To keep saving the instance, move the save call to your postgeneration "
-            "hooks or override _after_postgeneration.",
-        )
+        if cm:
+            [msg] = cm.warning.args
+            self.assertEqual(
+                msg,
+                "StandardFactoryWithPost._after_postgeneration will stop saving the "
+                "instance after postgeneration hooks in the next major release.\n"
+                "If the save call is extraneous, set skip_postgeneration_save=True in the "
+                "StandardFactoryWithPost.Meta.\n"
+                "To keep saving the instance, move the save call to your postgeneration "
+                "hooks or override _after_postgeneration.",
+            )
 
     def test_build_no_warning(self):
         self.StandardFactoryWithPost.build()
