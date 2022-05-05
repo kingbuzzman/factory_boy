@@ -163,7 +163,8 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def supports_bulk_insert(cls):
         connection = connections[cls._meta.database]
-        return (connection.features.has_bulk_insert
+        return (not cls._meta.django_get_or_create
+                and connection.features.has_bulk_insert
                 and connection.features.can_return_rows_from_bulk_insert)
 
     @classmethod
