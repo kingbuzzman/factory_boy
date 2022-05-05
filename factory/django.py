@@ -185,9 +185,13 @@ class DjangoModelFactory(base.Factory):
         collector = Collector('default')
         collector.collect(models_to_create)
         collector.sort()
-        for model_cls, models in collector.data.items():
+        for model_cls, objs in collector.data.items():
             manager = cls._get_manager(model_cls)
-            manager.bulk_create(models)
+            for instance in objs:
+                models.signals.pre_save.send(model_cls, instance=instance, created=True)
+            manager.bulk_create(objs)
+            for instance in objs:
+                models.signals.post_save.send(model_cls, instance=instance, created=True)
         return models_to_create
 
     @classmethod
@@ -302,6 +306,8 @@ def get_candidate_relations_to_delete(opts):
         for f in opts.get_fields(include_hidden=True)
         if isinstance(f, models.ForeignKey)
     )
+
+
 class Collector:
     def __init__(self, using):
         self.using = using
@@ -654,6 +660,7 @@ class Collector:
             if not found:
                 return
         self.data = {model: self.data[model] for model in sorted_models}
+
 
 class mute_signals:
     """Temporarily disables and then restores any django signals.
