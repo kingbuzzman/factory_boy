@@ -19,6 +19,9 @@ from contextlib import nullcontext
 
 import factory.django
 
+from faker import Factory as FakerFactory
+faker = FakerFactory.create()
+
 from . import testdata
 
 try:
@@ -77,7 +80,7 @@ class MultifieldModelFactory(factory.django.DjangoModelFactory):
         model = models.MultifieldModel
         django_get_or_create = ['slug']
 
-    text = factory.Faker('text')
+    text = factory.LazyAttribute(lambda n: faker.text()[:20])
 
 
 class AbstractBaseFactory(factory.django.DjangoModelFactory):
@@ -135,6 +138,7 @@ class WithSignalsFactory(factory.django.DjangoModelFactory):
 class WithCustomManagerFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.WithCustomManager
+        use_bulk_create = False
 
     foo = factory.Sequence(lambda n: "foo%d" % n)
 
@@ -1117,6 +1121,7 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         class ObjFactory(factory.django.DjangoModelFactory):
             class Meta:
                 model = models.FromAbstractWithCustomManager
+                use_bulk_create = False
 
         # Our CustomManager will remove the 'arg=' argument,
         # invalid for the actual model.
