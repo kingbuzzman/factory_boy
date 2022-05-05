@@ -146,21 +146,21 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
 class Level2Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.Level2
-    
+
     foo = factory.Sequence(lambda n: "foo%s" % n)
 
 
 class LevelA1Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.LevelA1
-    
+
     level_2 = factory.SubFactory(Level2Factory)
 
 
 class LevelA2Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.LevelA2
-    
+
     level_2 = factory.SubFactory(Level2Factory)
 
 
