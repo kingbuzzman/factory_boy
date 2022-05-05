@@ -5,21 +5,21 @@
 import io
 import os
 import unittest
+from contextlib import nullcontext
 from unittest import mock
 
 import django
 from django import test as django_test
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
-from django.db.models import signals
-from django.db import connections
-from django.test import utils as django_test_utils
 from django.core.management.color import no_style
-from contextlib import nullcontext
+from django.db import connections
+from django.db.models import signals
+from django.test import utils as django_test_utils
+from faker import Factory as FakerFactory
 
 import factory.django
 
-from faker import Factory as FakerFactory
 faker = FakerFactory.create()
 
 from . import testdata

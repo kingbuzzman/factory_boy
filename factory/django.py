@@ -4,16 +4,16 @@
 """factory_boy extensions for use with the Django framework."""
 
 
-from collections import defaultdict
 import functools
 import io
 import logging
 import os
 import warnings
+from collections import defaultdict
 
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
-from django.db import IntegrityError, models, connections
+from django.db import IntegrityError, connections, models
 
 from . import base, declarations, errors
 
