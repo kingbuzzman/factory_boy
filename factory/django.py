@@ -50,7 +50,7 @@ class DjangoOptions(base.FactoryOptions):
         return super()._build_default_options() + [
             base.OptionDefault('django_get_or_create', (), inherit=True),
             base.OptionDefault('database', DEFAULT_DB_ALIAS, inherit=True),
-            base.OptionDefault('use_bulk_create', True, inherit=True),
+            base.OptionDefault('use_bulk_create', False, inherit=True),
             base.OptionDefault('skip_postgeneration_save', False, inherit=True),
         ]
 
@@ -193,11 +193,9 @@ class DjangoModelFactory(base.Factory):
         for model_cls, objs in collector.data.items():
             manager = cls._get_manager(model_cls)
             for instance in objs:
-                # models.signals.pre_init.send(model_cls, instance=instance, created=False)
                 models.signals.pre_save.send(model_cls, instance=instance, created=False)
             manager.bulk_create(objs)
             for instance in objs:
-                # models.signals.post_init.send(model_cls, instance=instance, created=True)
                 models.signals.post_save.send(model_cls, instance=instance, created=True)
         return models_to_create
 

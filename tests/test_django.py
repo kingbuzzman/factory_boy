@@ -138,7 +138,6 @@ class WithSignalsFactory(factory.django.DjangoModelFactory):
 class WithCustomManagerFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.WithCustomManager
-        use_bulk_create = False
 
     foo = factory.Sequence(lambda n: "foo%d" % n)
 
@@ -155,6 +154,7 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
 class Level2Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.Level2
+        use_bulk_create = True
 
     foo = factory.Sequence(lambda n: "foo%s" % n)
 
@@ -162,6 +162,7 @@ class Level2Factory(factory.django.DjangoModelFactory):
 class LevelA1Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.LevelA1
+        use_bulk_create = True
 
     level_2 = factory.SubFactory(Level2Factory)
 
@@ -169,6 +170,7 @@ class LevelA1Factory(factory.django.DjangoModelFactory):
 class LevelA2Factory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.LevelA2
+        use_bulk_create = True
 
     level_2 = factory.SubFactory(Level2Factory)
 
@@ -1121,7 +1123,6 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         class ObjFactory(factory.django.DjangoModelFactory):
             class Meta:
                 model = models.FromAbstractWithCustomManager
-                use_bulk_create = False
 
         # Our CustomManager will remove the 'arg=' argument,
         # invalid for the actual model.
