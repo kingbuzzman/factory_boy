@@ -7,7 +7,6 @@
 from collections import defaultdict
 import functools
 import io
-from itertools import chain
 import logging
 import os
 import warnings
@@ -180,6 +179,10 @@ class DjangoModelFactory(base.Factory):
         if not cls.supports_bulk_insert():
             return super().create_batch(size, **kwargs)
 
+        return cls._bulk_create(size, **kwargs)
+
+    @classmethod
+    def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
         collector = Collector('default')
         collector.collect(models_to_create)
@@ -187,9 +190,11 @@ class DjangoModelFactory(base.Factory):
         for model_cls, objs in collector.data.items():
             manager = cls._get_manager(model_cls)
             for instance in objs:
-                models.signals.pre_save.send(model_cls, instance=instance, created=True)
+                # models.signals.pre_init.send(model_cls, instance=instance, created=False)
+                models.signals.pre_save.send(model_cls, instance=instance, created=False)
             manager.bulk_create(objs)
             for instance in objs:
+                # models.signals.post_init.send(model_cls, instance=instance, created=True)
                 models.signals.post_save.send(model_cls, instance=instance, created=True)
         return models_to_create
 
@@ -716,6 +721,7 @@ class mute_signals:
         if isinstance(callable_obj, base.FactoryMetaClass):
             # Retrieve __func__, the *actual* callable object.
             callable_obj._create = self.wrap_method(callable_obj._create.__func__)
+            callable_obj._bulk_create = self.wrap_method(callable_obj._bulk_create.__func__)
             callable_obj._generate = self.wrap_method(callable_obj._generate.__func__)
             return callable_obj
 
