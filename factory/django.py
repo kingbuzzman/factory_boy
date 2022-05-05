@@ -50,6 +50,7 @@ class DjangoOptions(base.FactoryOptions):
         return super()._build_default_options() + [
             base.OptionDefault('django_get_or_create', (), inherit=True),
             base.OptionDefault('database', DEFAULT_DB_ALIAS, inherit=True),
+            base.OptionDefault('use_bulk_create', True, inherit=True),
             base.OptionDefault('skip_postgeneration_save', False, inherit=True),
         ]
 
@@ -163,7 +164,8 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def supports_bulk_insert(cls):
         connection = connections[cls._meta.database]
-        return (not cls._meta.django_get_or_create
+        return (cls._meta.use_bulk_create
+                and not cls._meta.django_get_or_create
                 and connection.features.has_bulk_insert
                 and connection.features.can_return_rows_from_bulk_insert)
 
