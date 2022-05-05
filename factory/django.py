@@ -162,14 +162,25 @@ class DjangoModelFactory(base.Factory):
         return instance
 
     @classmethod
+    @functools.lru_cache
+    def supports_bulk_insert(cls):
+        connection = connections[cls._meta.database]
+        return (connection.features.has_bulk_insert
+                and connection.features.can_return_rows_from_bulk_insert)
+
+    @classmethod
     def create(cls, **kwargs):
         """Create an instance of the associated class, with overridden attrs."""
+        if not cls.supports_bulk_insert():
+            return super().create(**kwargs)
+
         return cls.create_batch(1, **kwargs)[0]
 
     @classmethod
     def create_batch(cls, size, **kwargs):
-        connection = connections[cls._meta.database]
-        
+        if not cls.supports_bulk_insert():
+            return super().create_batch(size, **kwargs)
+
         models_to_create = cls.build_batch(size, **kwargs)
         collector = Collector('default')
         collector.collect(models_to_create)
@@ -493,7 +504,7 @@ class Collector:
                 val = getattr(obj, related.name)
                 if val:
                     collected_objs.append(val)
-            
+
             new_objs = self.collect(objs=collected_objs, source=model, reverse_dependency=False)
 
             continue

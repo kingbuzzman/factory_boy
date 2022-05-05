@@ -27,6 +27,8 @@ except ImportError:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
 
+SKIP_POSTGRESDB = bool(os.environ.get('DJANGO_SETTINGS_MODULE') == 'tests.djapp.settings')
+
 from .djapp import models  # noqa:E402 isort:skip
 
 test_state = {}
@@ -164,7 +166,8 @@ class LevelA2Factory(factory.django.DjangoModelFactory):
     level_2 = factory.SubFactory(Level2Factory)
 
 
-class DjangoQueryEfficiency(django_test.TestCase):
+@unittest.skipIf(SKIP_POSTGRESDB, "postgresdb tests disabled.")
+class DjangoBulkInsert(django_test.TestCase):
 
     def test_single_object_create(self):
         with self.assertNumQueries(1):
@@ -189,6 +192,7 @@ class DjangoQueryEfficiency(django_test.TestCase):
         existing_level2 = Level2Factory()
         with self.assertNumQueries(1):
             LevelA1Factory.create_batch(10, level_2=existing_level2)
+
 
 class ModelTests(django_test.TestCase):
     databases = {'default', 'replica'}
