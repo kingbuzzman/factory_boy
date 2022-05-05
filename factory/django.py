@@ -168,11 +168,12 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def create_batch(cls, size, **kwargs):
+        connection = connections[cls._meta.database]
+        
         models_to_create = cls.build_batch(size, **kwargs)
         collector = Collector('default')
         collector.collect(models_to_create)
         collector.sort()
-        import ipdb; ipdb.sset_trace()
         for model_cls, models in collector.data.items():
             manager = cls._get_manager(model_cls)
             manager.bulk_create(models)
