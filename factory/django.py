@@ -162,7 +162,6 @@ class DjangoModelFactory(base.Factory):
         return instance
 
     @classmethod
-    @functools.lru_cache
     def supports_bulk_insert(cls):
         connection = connections[cls._meta.database]
         return (connection.features.has_bulk_insert
