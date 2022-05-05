@@ -13,10 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
-          - "3.8"
-          - "3.9"
+          # - "3.8"
+          # - "3.9"
           - "3.10"
-          - "pypy-3.8"
+          # - "pypy-3.8"
         tox-environment:
           - django32-alchemy-mongoengine-postgres
           - django40-alchemy-mongoengine-postgres
