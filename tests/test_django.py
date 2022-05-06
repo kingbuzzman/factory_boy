@@ -5,7 +5,6 @@
 import io
 import os
 import unittest
-from contextlib import nullcontext
 from unittest import mock
 
 import django
@@ -1142,22 +1141,20 @@ class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
             obj.non_existant_field = 3
 
     def test_create_warning(self):
-        context = self.assertWarns(DeprecationWarning) if SKIP_POSTGRESDB else nullcontext()
-        with context as cm:
+        with self.assertWarns(DeprecationWarning) as cm:
             instance = self.StandardFactoryWithPost.create()
             assert instance.non_existant_field == 3
 
-        if cm:
-            [msg] = cm.warning.args
-            self.assertEqual(
-                msg,
-                "StandardFactoryWithPost._after_postgeneration will stop saving the "
-                "instance after postgeneration hooks in the next major release.\n"
-                "If the save call is extraneous, set skip_postgeneration_save=True in the "
-                "StandardFactoryWithPost.Meta.\n"
-                "To keep saving the instance, move the save call to your postgeneration "
-                "hooks or override _after_postgeneration.",
-            )
+        [msg] = cm.warning.args
+        self.assertEqual(
+            msg,
+            "StandardFactoryWithPost._after_postgeneration will stop saving the "
+            "instance after postgeneration hooks in the next major release.\n"
+            "If the save call is extraneous, set skip_postgeneration_save=True in the "
+            "StandardFactoryWithPost.Meta.\n"
+            "To keep saving the instance, move the save call to your postgeneration "
+            "hooks or override _after_postgeneration.",
+        )
 
     def test_build_no_warning(self):
         self.StandardFactoryWithPost.build()
