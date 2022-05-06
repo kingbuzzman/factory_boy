@@ -39,7 +39,8 @@ jobs:
         image: postgres:alpine
         ports:
           - 5432:5432
-
+        environment:
+          POSTGRES_PASSWORD:
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
