@@ -224,17 +224,19 @@ class ModelTests(django_test.TestCase):
         self.assertEqual(obj, models.StandardModel.objects.using('replica').get())
 
 
-class DjangoPkSequenceTestCase(django_test.TestCase):
-    def setUp(self):
-        super().setUp()
-        StandardFactory.reset_sequence()
-
+class DjangoResetTestCase(django_test.TestCase):
     def reset_database_sequences(self, *models):
-        using = StandardFactory._meta.database
+        using = factory.django.DEFAULT_DB_ALIAS
         with connections[using].cursor() as cursor:
             sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), models)
             for command in sequence_sql:
                 cursor.execute(command)
+
+
+class DjangoPkSequenceTestCase(DjangoResetTestCase):
+    def setUp(self):
+        super().setUp()
+        StandardFactory.reset_sequence()
 
     def test_pk_first(self):
         std = StandardFactory.build()
@@ -445,8 +447,7 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
         self.assertEqual('foo0', nonint2.pk)
 
 
-class DjangoAbstractBaseSequenceTestCase(django_test.TransactionTestCase):
-    reset_sequences = True
+class DjangoAbstractBaseSequenceTestCase(DjangoResetTestCase):
 
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
@@ -469,6 +470,8 @@ class DjangoAbstractBaseSequenceTestCase(django_test.TransactionTestCase):
         class ConcreteSonFactory(AbstractBaseFactory):
             class Meta:
                 model = models.ConcreteSon
+
+        self.reset_database_sequences(models.ConcreteSon)
 
         obj = ConcreteSonFactory()
         self.assertEqual(1, obj.pk)
