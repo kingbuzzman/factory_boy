@@ -167,10 +167,14 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def supports_bulk_insert(cls):
         connection = connections[cls._meta.database]
+        if DJANGO_22:
+            can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
+        else:
+            can_return_rows_from_bulk_insert = connection.features.can_return_rows_from_bulk_insert
         return (cls._meta.use_bulk_create
                 and not cls._meta.django_get_or_create
                 and connection.features.has_bulk_insert
-                and connection.features.can_return_ids_from_bulk_insert)
+                and can_return_rows_from_bulk_insert)
 
     @classmethod
     def create(cls, **kwargs):
