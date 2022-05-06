@@ -11,7 +11,7 @@ import os
 import warnings
 from collections import defaultdict
 
-from distutils.version import LooseVersion
+from packaging.version import Version
 from django import __version__ as django_version
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
@@ -24,7 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
-DJANGO_22 = LooseVersion('2.2') <= LooseVersion(django_version) < LooseVersion('3.0')
+DJANGO_22 = Version('2.2') <= Version(django_version) < Version('3.0')
 
 _LAZY_LOADS = {}
 
