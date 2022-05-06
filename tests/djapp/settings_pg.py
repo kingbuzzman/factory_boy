@@ -6,6 +6,12 @@ import os
 
 from .settings import *  # noqa: F401, F403
 
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
