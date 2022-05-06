@@ -68,3 +68,5 @@ jobs:
 
       - name: Run tests
         run: tox
+        env:
+          PLATFORM: ${{ matrix.platform }}
