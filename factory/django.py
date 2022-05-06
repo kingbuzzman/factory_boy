@@ -11,6 +11,8 @@ import os
 import warnings
 from collections import defaultdict
 
+from distutils.version import LooseVersion
+from django import __version__ as django_version
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
 from django.db import IntegrityError, connections, models
@@ -22,6 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
+DJANGO_22 = LooseVersion('2.2') <= LooseVersion(django_version) < LooseVersion('3.0')
 
 _LAZY_LOADS = {}
 
@@ -167,7 +170,7 @@ class DjangoModelFactory(base.Factory):
         return (cls._meta.use_bulk_create
                 and not cls._meta.django_get_or_create
                 and connection.features.has_bulk_insert
-                and connection.features.can_return_rows_from_bulk_insert)
+                and connection.features.can_return_ids_from_bulk_insert)
 
     @classmethod
     def create(cls, **kwargs):
@@ -185,6 +188,17 @@ class DjangoModelFactory(base.Factory):
         return cls._bulk_create(size, **kwargs)
 
     @classmethod
+    def _refresh_database_pks(cls, model_cls, objs):
+        if not DJANGO_22:
+            return
+        fields = [f for f in model_cls._meta.get_fields() if isinstance(f, models.fields.related.ForeignObject)]
+        if not fields:
+            return
+        for obj in objs:
+            for field in fields:
+                setattr(obj, field.name, getattr(obj, field.name))
+
+    @classmethod
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
         collector = Collector(cls._meta.database)
@@ -194,6 +208,7 @@ class DjangoModelFactory(base.Factory):
             manager = cls._get_manager(model_cls)
             for instance in objs:
                 models.signals.pre_save.send(model_cls, instance=instance, created=False)
+            cls._refresh_database_pks(model_cls, objs)
             manager.bulk_create(objs)
             for instance in objs:
                 models.signals.post_save.send(model_cls, instance=instance, created=True)
