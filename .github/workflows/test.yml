@@ -24,13 +24,21 @@ jobs:
           - django40-postgres
         include:
           - python-version: "3.7"
-            tox-environment: django22-{sqlite,postgres}
-          - python-version: "pypy-3.7"
-            tox-environment: django22-{sqlite,postgres}
+            tox-environment: django22-sqlite
           - python-version: "3.7"
-            tox-environment: django32-{sqlite,postgres}
+            tox-environment: django22-postgres
           - python-version: "pypy-3.7"
-            tox-environment: django32-{sqlite,postgres}
+            tox-environment: django22-sqlite
+          - python-version: "pypy-3.7"
+            tox-environment: django22-postgres
+          - python-version: "3.7"
+            tox-environment: django32-sqlite
+          - python-version: "3.7"
+            tox-environment: django32-postgres
+          - python-version: "pypy-3.7"
+            tox-environment: django32-sqlite
+          - python-version: "pypy-3.7"
+            tox-environment: django32-postgres
     services:
       mongodb:
         image: mongo
