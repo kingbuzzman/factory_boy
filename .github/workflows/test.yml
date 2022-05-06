@@ -19,7 +19,9 @@ jobs:
           - "pypy-3.8"
         tox-environment:
           - django32-alchemy-mongoengine
+          - django32-alchemy-mongoengine-postgres
           - django40-alchemy-mongoengine
+          - django40-alchemy-mongoengine-postgres
         include:
           - python-version: "3.7"
             tox-environment: django22-alchemy-mongoengine
