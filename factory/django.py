@@ -49,6 +49,15 @@ def _lazy_load_get_model():
 
 
 def connection_supports_bulk_insert(using):
+    """
+    Does the database support bulk_insert
+
+    There are 2 pieces to this puzzle:
+      * The database needs to support `bulk_insert`
+      * AND it also needs to be capable of returning all the newly minted objects' id
+
+    If any of these is `False`, the database does NOT support bulk_insert
+    """
     connection = connections[using]
     if DJANGO_22:
         can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
