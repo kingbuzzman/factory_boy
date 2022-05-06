@@ -33,7 +33,7 @@ faker = FakerFactory.create()
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
 
-SKIP_POSTGRESDB = bool(os.environ.get('DJANGO_SETTINGS_MODULE') == 'tests.djapp.settings')
+SKIP_BULK_INSERT = not factory.django.connection_supports_bulk_insert(factory.django.DEFAULT_DB_ALIAS)
 
 from .djapp import models  # noqa:E402 isort:skip
 
@@ -175,7 +175,7 @@ class LevelA2Factory(factory.django.DjangoModelFactory):
     level_2 = factory.SubFactory(Level2Factory)
 
 
-@unittest.skipIf(SKIP_POSTGRESDB, "postgresdb tests disabled.")
+@unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
 class DjangoBulkInsert(django_test.TestCase):
 
     def test_single_object_create(self):

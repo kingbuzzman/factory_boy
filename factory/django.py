@@ -48,6 +48,16 @@ def _lazy_load_get_model():
     _LAZY_LOADS['get_model'] = django_apps.apps.get_model
 
 
+def connection_supports_bulk_insert(using):
+    connection = connections[using]
+    if DJANGO_22:
+        can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
+    else:
+        can_return_rows_from_bulk_insert = connection.features.can_return_rows_from_bulk_insert
+    return (connection.features.has_bulk_insert
+            and can_return_rows_from_bulk_insert)
+
+
 class DjangoOptions(base.FactoryOptions):
     def _build_default_options(self):
         return super()._build_default_options() + [
@@ -166,15 +176,8 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def supports_bulk_insert(cls):
-        connection = connections[cls._meta.database]
-        if DJANGO_22:
-            can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
-        else:
-            can_return_rows_from_bulk_insert = connection.features.can_return_rows_from_bulk_insert
         return (cls._meta.use_bulk_create
-                and not cls._meta.django_get_or_create
-                and connection.features.has_bulk_insert
-                and can_return_rows_from_bulk_insert)
+                and connection_supports_bulk_insert(cls._meta.database))
 
     @classmethod
     def create(cls, **kwargs):
