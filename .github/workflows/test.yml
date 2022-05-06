@@ -36,7 +36,7 @@ jobs:
           - 27017:27017
 
       postgresdb:
-        image: postgres
+        image: postgres:alpine
         ports:
           - 5432:5432
 
