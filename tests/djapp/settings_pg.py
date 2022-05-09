@@ -7,6 +7,9 @@ import os
 from .settings import *  # noqa: F401, F403
 
 try:
+    # pypy does not support `psycopg2` or `psycopg2-binary`
+    # This is a package that only gets installed with pypy, and it needs to be
+    # initialized for it to work properly. It mimic `psycopg2` 1-to-1
     from psycopg2cffi import compat
     compat.register()
 except ImportError:
