@@ -24,7 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
-DJANGO_22 = Version('2.2') <= Version(django_version) < Version('3.0')
+DJANGO_22 = Version(django_version) < Version('3.0')
 
 _LAZY_LOADS = {}
 
@@ -205,9 +205,18 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def _refresh_database_pks(cls, model_cls, objs):
+        """
+        Before Django 3.0, there is an issue when bulk_insert.
+
+        The issue is that if you create an instance of a model,
+        and reference it in another unsaved instance of a model.
+        When you create the instance of the first one, the pk/id
+        is never updated on the sub model that referenced the first.
+        """
         if not DJANGO_22:
             return
-        fields = [f for f in model_cls._meta.get_fields() if isinstance(f, models.fields.related.ForeignObject)]
+        fields = [f for f in model_cls._meta.get_fields()
+                  if isinstance(f, models.fields.related.ForeignObject)]
         if not fields:
             return
         for obj in objs:
@@ -217,17 +226,13 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
-        collector = Collector(cls._meta.database)
+        collector = DependencyInsertOrderCollector()
         collector.collect(cls, models_to_create)
         collector.sort()
         for model_cls, objs in collector.data.items():
             manager = cls._get_manager(model_cls)
-            for instance in objs:
-                models.signals.pre_save.send(model_cls, instance=instance, created=False)
             cls._refresh_database_pks(model_cls, objs)
             manager.bulk_create(objs)
-            for instance in objs:
-                models.signals.post_save.send(model_cls, instance=instance, created=True)
         return models_to_create
 
     @classmethod
@@ -334,19 +339,10 @@ class ImageField(FileField):
         return thumb_io.getvalue()
 
 
-class Collector:
-    def __init__(self, using):
-        self.using = using
+class DependencyInsertOrderCollector:
+    def __init__(self):
         # Initially, {model: {instances}}, later values become lists.
         self.data = defaultdict(list)
-        # {model: {(field, value): {instances}}}
-        self.field_updates = defaultdict(functools.partial(defaultdict, set))
-        # {model: {field: {instances}}}
-        self.restricted_objects = defaultdict(functools.partial(defaultdict, set))
-        # fast_deletes is a list of queryset-likes that can be deleted without
-        # fetching the objects into memory.
-        self.fast_deletes = []
-
         # Tracks deletion-order dependency for databases without transactions
         # or ability to defer constraint checks. Only concrete model classes
         # should be included, as the dependencies exist only between actual
@@ -354,9 +350,9 @@ class Collector:
         # parent.
         self.dependencies = defaultdict(set)  # {model: {models}}
 
-    def add(self, objs, source=None, nullable=False, reverse_dependency=False):
+    def add(self, objs, source=None, nullable=False):
         """
-        Add 'objs' to the collection of objects to be deleted.  If the call is
+        Add 'objs' to the collection of objects to be inserted in order.  If the call is
         the result of a cascade, 'source' should be the model that caused it,
         and 'nullable' should be set to True if the relation can be null.
         Return a list of all objects that were not already collected.
@@ -372,21 +368,15 @@ class Collector:
                 continue
             if id(obj) not in lookup:
                 new_objs.append(obj)
-        # import ipdb; ipdb.sset_trace()
         instances.extend(new_objs)
         # Nullable relationships can be ignored -- they are nulled out before
         # deleting, and therefore do not affect the order in which objects have
         # to be deleted.
         if source is not None and not nullable:
-            self.add_dependency(source, model, reverse_dependency=reverse_dependency)
-        # if not nullable:
-        #     import ipdb; ipdb.sset_trace()
-        #     self.add_dependency(source, model, reverse_dependency=reverse_dependency)
+            self.add_dependency(source, model)
         return new_objs
 
-    def add_dependency(self, model, dependency, reverse_dependency=False):
-        if reverse_dependency:
-            model, dependency = dependency, model
+    def add_dependency(self, model, dependency):
         self.dependencies[model._meta.concrete_model].add(
             dependency._meta.concrete_model
         )
@@ -398,11 +388,6 @@ class Collector:
         objs,
         source=None,
         nullable=False,
-        collect_related=True,
-        source_attr=None,
-        reverse_dependency=False,
-        keep_parents=False,
-        fail_on_restricted=True,
     ):
         """
         Add 'objs' to the collection of objects to be deleted as well as all
@@ -412,10 +397,6 @@ class Collector:
         If the call is the result of a cascade, 'source' should be the model
         that caused it and 'nullable' should be set to True, if the relation
         can be null.
-        If 'reverse_dependency' is True, 'source' will be deleted before the
-        current model, rather than after. (Needed for cascading to parent
-        models, the one case in which the cascade follows the forwards
-        direction of an FK rather than the reverse direction.)
         If 'keep_parents' is True, data of parent model's will be not deleted.
         If 'fail_on_restricted' is False, error won't be raised even if it's
         prohibited to delete such objects due to RESTRICT, that defers
@@ -424,32 +405,27 @@ class Collector:
         can be deleted.
         """
         new_objs = self.add(
-            objs, source, nullable, reverse_dependency=reverse_dependency
+            objs, source, nullable
         )
         if not new_objs:
             return
 
-        # import ipdb; ipdb.sset_trace()
         model = new_objs[0].__class__
 
-        def get_candidate_relations(opts):
-            # The candidate relations are the ones that come from N-1 and 1-1 relations.
-            # N-N  (i.e., many-to-many) relations aren't candidates for deletion.
-            return (
-                f
-                for f in opts.get_fields(include_hidden=True)
-                if isinstance(f, models.ForeignKey)
-            )
+        # The candidate relations are the ones that come from N-1 and 1-1 relations.
+        candidate_relations = (
+            f for f in model._meta.get_fields(include_hidden=True)
+            if isinstance(f, models.ForeignKey)
+        )
 
         collected_objs = []
-        for field in get_candidate_relations(model._meta):
+        for field in candidate_relations:
             for obj in new_objs:
                 val = getattr(obj, field.name)
                 if isinstance(val, models.Model):
                     collected_objs.append(val)
 
-        for name, _ in factory_cls._meta.post_declarations.as_dict().items():
-
+        for name, in factory_cls._meta.post_declarations.as_dict().keys():
             for obj in new_objs:
                 val = getattr(obj, name, None)
                 if isinstance(val, models.Model):
@@ -457,14 +433,19 @@ class Collector:
 
         if collected_objs:
             new_objs = self.collect(
-                factory_cls=factory_cls, objs=collected_objs, source=model, reverse_dependency=False
+                factory_cls=factory_cls, objs=collected_objs, source=model
             )
 
     def sort(self):
+        """
+        Sort the model instances by the least dependecies to the most dependencies.
+
+        We want to insert the models with no dependencies first, and continue inserting
+        using the models that the higher models depend on.
+        """
         sorted_models = []
         concrete_models = set()
         models = list(self.data)
-        # import ipdb; ipdb.sset_trace()
         while len(sorted_models) < len(models):
             found = False
             for model in models:
@@ -476,6 +457,7 @@ class Collector:
                     concrete_models.add(model._meta.concrete_model)
                     found = True
             if not found:
+                logger.debug('dependency order could not be determined')
                 return
         self.data = {model: self.data[model] for model in sorted_models}
 
