@@ -226,7 +226,7 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
-        collector = Collector()
+        collector = DependencyInsertOrderCollector()
         collector.collect(cls, models_to_create)
         collector.sort()
         for model_cls, objs in collector.data.items():
@@ -339,7 +339,7 @@ class ImageField(FileField):
         return thumb_io.getvalue()
 
 
-class Collector:
+class DependencyInsertOrderCollector:
     def __init__(self):
         # Initially, {model: {instances}}, later values become lists.
         self.data = defaultdict(list)

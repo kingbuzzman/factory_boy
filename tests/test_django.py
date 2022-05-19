@@ -175,6 +175,16 @@ class LevelA2Factory(factory.django.DjangoModelFactory):
     level_2 = factory.SubFactory(Level2Factory)
 
 
+class DependencyInsertOrderCollector(django_test.TestCase):
+
+    def test_empty(self):
+        collector = factory.django.DependencyInsertOrderCollector()
+        collector.collect(Level2Factory, [])
+        collector.sort()
+
+        self.assertEqual(collector.data, {})
+
+
 @unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
 class DjangoBulkInsert(django_test.TestCase):
 
