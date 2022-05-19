@@ -9,10 +9,13 @@ import io
 import logging
 import os
 import warnings
+from collections import defaultdict
 
+from django import __version__ as django_version
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
-from django.db import IntegrityError
+from django.db import IntegrityError, connections, models
+from packaging.version import Version
 
 from . import base, declarations, errors
 
@@ -21,6 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
+DJANGO_22 = Version(django_version) < Version('3.0')
 
 _LAZY_LOADS = {}
 
@@ -44,11 +48,31 @@ def _lazy_load_get_model():
     _LAZY_LOADS['get_model'] = django_apps.apps.get_model
 
 
+def connection_supports_bulk_insert(using):
+    """
+    Does the database support bulk_insert
+
+    There are 2 pieces to this puzzle:
+      * The database needs to support `bulk_insert`
+      * AND it also needs to be capable of returning all the newly minted objects' id
+
+    If any of these is `False`, the database does NOT support bulk_insert
+    """
+    connection = connections[using]
+    if DJANGO_22:
+        can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
+    else:
+        can_return_rows_from_bulk_insert = connection.features.can_return_rows_from_bulk_insert
+    return (connection.features.has_bulk_insert
+            and can_return_rows_from_bulk_insert)
+
+
 class DjangoOptions(base.FactoryOptions):
     def _build_default_options(self):
         return super()._build_default_options() + [
             base.OptionDefault('django_get_or_create', (), inherit=True),
             base.OptionDefault('database', DEFAULT_DB_ALIAS, inherit=True),
+            base.OptionDefault('use_bulk_create', False, inherit=True),
             base.OptionDefault('skip_postgeneration_save', False, inherit=True),
         ]
 
@@ -160,6 +184,58 @@ class DjangoModelFactory(base.Factory):
         return instance
 
     @classmethod
+    def supports_bulk_insert(cls):
+        return (cls._meta.use_bulk_create
+                and connection_supports_bulk_insert(cls._meta.database))
+
+    @classmethod
+    def create(cls, **kwargs):
+        """Create an instance of the associated class, with overridden attrs."""
+        if not cls.supports_bulk_insert():
+            return super().create(**kwargs)
+
+        return cls._bulk_create(1, **kwargs)[0]
+
+    @classmethod
+    def create_batch(cls, size, **kwargs):
+        if not cls.supports_bulk_insert():
+            return super().create_batch(size, **kwargs)
+
+        return cls._bulk_create(size, **kwargs)
+
+    @classmethod
+    def _refresh_database_pks(cls, model_cls, objs):
+        """
+        Before Django 3.0, there is an issue when bulk_insert.
+
+        The issue is that if you create an instance of a model,
+        and reference it in another unsaved instance of a model.
+        When you create the instance of the first one, the pk/id
+        is never updated on the sub model that referenced the first.
+        """
+        if not DJANGO_22:
+            return
+        fields = [f for f in model_cls._meta.get_fields()
+                  if isinstance(f, models.fields.related.ForeignObject)]
+        if not fields:
+            return
+        for obj in objs:
+            for field in fields:
+                setattr(obj, field.name, getattr(obj, field.name))
+
+    @classmethod
+    def _bulk_create(cls, size, **kwargs):
+        models_to_create = cls.build_batch(size, **kwargs)
+        collector = DependencyInsertOrderCollector()
+        collector.collect(cls, models_to_create)
+        collector.sort()
+        for model_cls, objs in collector.data.items():
+            manager = cls._get_manager(model_cls)
+            cls._refresh_database_pks(model_cls, objs)
+            manager.bulk_create(objs)
+        return models_to_create
+
+    @classmethod
     def _create(cls, model_class, *args, **kwargs):
         """Create an instance of the model, and save it to the database."""
         if cls._meta.django_get_or_create:
@@ -263,6 +339,129 @@ class ImageField(FileField):
         return thumb_io.getvalue()
 
 
+class DependencyInsertOrderCollector:
+    def __init__(self):
+        # Initially, {model: {instances}}, later values become lists.
+        self.data = defaultdict(list)
+        # Tracks deletion-order dependency for databases without transactions
+        # or ability to defer constraint checks. Only concrete model classes
+        # should be included, as the dependencies exist only between actual
+        # database tables; proxy models are represented here by their concrete
+        # parent.
+        self.dependencies = defaultdict(set)  # {model: {models}}
+
+    def add(self, objs, source=None, nullable=False):
+        """
+        Add 'objs' to the collection of objects to be inserted in order.  If the call is
+        the result of a cascade, 'source' should be the model that caused it,
+        and 'nullable' should be set to True if the relation can be null.
+        Return a list of all objects that were not already collected.
+        """
+        if not objs:
+            return []
+        new_objs = []
+        model = objs[0].__class__
+        instances = self.data[model]
+        lookup = [id(instance) for instance in instances]
+        for obj in objs:
+            if not obj._state.adding:
+                continue
+            if id(obj) not in lookup:
+                new_objs.append(obj)
+        instances.extend(new_objs)
+        # Nullable relationships can be ignored -- they are nulled out before
+        # deleting, and therefore do not affect the order in which objects have
+        # to be deleted.
+        if source is not None and not nullable:
+            self.add_dependency(source, model)
+        return new_objs
+
+    def add_dependency(self, model, dependency):
+        self.dependencies[model._meta.concrete_model].add(
+            dependency._meta.concrete_model
+        )
+        self.data.setdefault(dependency, self.data.default_factory())
+
+    def collect(
+        self,
+        factory_cls,
+        objs,
+        source=None,
+        nullable=False,
+    ):
+        """
+        Add 'objs' to the collection of objects to be deleted as well as all
+        parent instances.  'objs' must be a homogeneous iterable collection of
+        model instances (e.g. a QuerySet).  If 'collect_related' is True,
+        related objects will be handled by their respective on_delete handler.
+        If the call is the result of a cascade, 'source' should be the model
+        that caused it and 'nullable' should be set to True, if the relation
+        can be null.
+        If 'keep_parents' is True, data of parent model's will be not deleted.
+        If 'fail_on_restricted' is False, error won't be raised even if it's
+        prohibited to delete such objects due to RESTRICT, that defers
+        restricted object checking in recursive calls where the top-level call
+        may need to collect more objects to determine whether restricted ones
+        can be deleted.
+        """
+        new_objs = self.add(
+            objs, source, nullable
+        )
+        if not new_objs:
+            return
+
+        model = new_objs[0].__class__
+
+        # The candidate relations are the ones that come from N-1 and 1-1 relations.
+        candidate_relations = (
+            f for f in model._meta.get_fields(include_hidden=True)
+            if isinstance(f, models.ForeignKey)
+        )
+
+        collected_objs = []
+        for field in candidate_relations:
+            for obj in new_objs:
+                val = getattr(obj, field.name)
+                if isinstance(val, models.Model):
+                    collected_objs.append(val)
+
+        for name, in factory_cls._meta.post_declarations.as_dict().keys():
+            for obj in new_objs:
+                val = getattr(obj, name, None)
+                if isinstance(val, models.Model):
+                    collected_objs.append(val)
+
+        if collected_objs:
+            new_objs = self.collect(
+                factory_cls=factory_cls, objs=collected_objs, source=model
+            )
+
+    def sort(self):
+        """
+        Sort the model instances by the least dependecies to the most dependencies.
+
+        We want to insert the models with no dependencies first, and continue inserting
+        using the models that the higher models depend on.
+        """
+        sorted_models = []
+        concrete_models = set()
+        models = list(self.data)
+        while len(sorted_models) < len(models):
+            found = False
+            for model in models:
+                if model in sorted_models:
+                    continue
+                dependencies = self.dependencies.get(model._meta.concrete_model)
+                if not (dependencies and dependencies.difference(concrete_models)):
+                    sorted_models.append(model)
+                    concrete_models.add(model._meta.concrete_model)
+                    found = True
+            if not found:
+                logger.debug('dependency order could not be determined')
+                return
+        self.data = {model: self.data[model] for model in sorted_models}
+
+
 class mute_signals:
     """Temporarily disables and then restores any django signals.
 
@@ -318,6 +517,7 @@ class mute_signals:
         if isinstance(callable_obj, base.FactoryMetaClass):
             # Retrieve __func__, the *actual* callable object.
             callable_obj._create = self.wrap_method(callable_obj._create.__func__)
+            callable_obj._bulk_create = self.wrap_method(callable_obj._bulk_create.__func__)
             callable_obj._generate = self.wrap_method(callable_obj._generate.__func__)
             return callable_obj
 

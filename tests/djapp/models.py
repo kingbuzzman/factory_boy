@@ -133,3 +133,24 @@ class AbstractWithCustomManager(models.Model):
 
 class FromAbstractWithCustomManager(AbstractWithCustomManager):
     pass
+
+
+class Level2(models.Model):
+
+    foo = models.CharField(max_length=20)
+
+
+class LevelA1(models.Model):
+
+    level_2 = models.ForeignKey(Level2, on_delete=models.CASCADE)
+
+
+class LevelA2(models.Model):
+
+    level_2 = models.ForeignKey(Level2, on_delete=models.CASCADE)
+
+
+class Level0(models.Model):
+
+    level_a1 = models.ForeignKey(LevelA1, on_delete=models.CASCADE)
+    level_a2 = models.ForeignKey(LevelA2, on_delete=models.CASCADE)

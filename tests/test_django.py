@@ -11,8 +11,11 @@ import django
 from django import test as django_test
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
+from django.core.management.color import no_style
+from django.db import connections
 from django.db.models import signals
 from django.test import utils as django_test_utils
+from faker import Factory as FakerFactory
 
 import factory.django
 
@@ -23,9 +26,14 @@ try:
 except ImportError:
     Image = None
 
+faker = FakerFactory.create()
+
+
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
+
+SKIP_BULK_INSERT = not factory.django.connection_supports_bulk_insert(factory.django.DEFAULT_DB_ALIAS)
 
 from .djapp import models  # noqa:E402 isort:skip
 
@@ -72,7 +80,7 @@ class MultifieldModelFactory(factory.django.DjangoModelFactory):
         model = models.MultifieldModel
         django_get_or_create = ['slug']
 
-    text = factory.Faker('text')
+    text = factory.LazyAttribute(lambda n: faker.text()[:20])
 
 
 class AbstractBaseFactory(factory.django.DjangoModelFactory):
@@ -143,6 +151,68 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
+class Level2Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.Level2
+        use_bulk_create = True
+
+    foo = factory.Sequence(lambda n: "foo%s" % n)
+
+
+class LevelA1Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.LevelA1
+        use_bulk_create = True
+
+    level_2 = factory.SubFactory(Level2Factory)
+
+
+class LevelA2Factory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.LevelA2
+        use_bulk_create = True
+
+    level_2 = factory.SubFactory(Level2Factory)
+
+
+class DependencyInsertOrderCollector(django_test.TestCase):
+
+    def test_empty(self):
+        collector = factory.django.DependencyInsertOrderCollector()
+        collector.collect(Level2Factory, [])
+        collector.sort()
+
+        self.assertEqual(collector.data, {})
+
+
+@unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
+class DjangoBulkInsert(django_test.TestCase):
+
+    def test_single_object_create(self):
+        with self.assertNumQueries(1):
+            Level2Factory()
+
+    def test_single_object_create_batch(self):
+        with self.assertNumQueries(1):
+            Level2Factory.create_batch(10)
+
+    def test_one_level_nested_single_object_create(self):
+        with self.assertNumQueries(2):
+            LevelA1Factory()
+
+        existing_level2 = Level2Factory()
+        with self.assertNumQueries(1):
+            LevelA1Factory(level_2=existing_level2)
+
+    def test_one_level_nested_single_object_create_batch(self):
+        with self.assertNumQueries(2):
+            LevelA1Factory.create_batch(10)
+
+        existing_level2 = Level2Factory()
+        with self.assertNumQueries(1):
+            LevelA1Factory.create_batch(10, level_2=existing_level2)
+
+
 class ModelTests(django_test.TestCase):
     databases = {'default', 'replica'}
 
@@ -164,7 +234,16 @@ class ModelTests(django_test.TestCase):
         self.assertEqual(obj, models.StandardModel.objects.using('replica').get())
 
 
-class DjangoPkSequenceTestCase(django_test.TestCase):
+class DjangoResetTestCase(django_test.TestCase):
+    def reset_database_sequences(self, *models):
+        using = factory.django.DEFAULT_DB_ALIAS
+        with connections[using].cursor() as cursor:
+            sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), models)
+            for command in sequence_sql:
+                cursor.execute(command)
+
+
+class DjangoPkSequenceTestCase(DjangoResetTestCase):
     def setUp(self):
         super().setUp()
         StandardFactory.reset_sequence()
@@ -180,6 +259,8 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         self.assertEqual('foo1', std2.foo)
 
     def test_pk_creation(self):
+        self.reset_database_sequences(StandardFactory._meta.model)
+
         std1 = StandardFactory.create()
         self.assertEqual('foo0', std1.foo)
         self.assertEqual(1, std1.pk)
@@ -193,6 +274,8 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         std1 = StandardFactory.create(pk=10)
         self.assertEqual('foo0', std1.foo)  # sequence is unrelated to pk
         self.assertEqual(10, std1.pk)
+
+        self.reset_database_sequences(StandardFactory._meta.model)
 
         StandardFactory.reset_sequence()
         std2 = StandardFactory.create()
@@ -374,7 +457,8 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
         self.assertEqual('foo0', nonint2.pk)
 
 
-class DjangoAbstractBaseSequenceTestCase(django_test.TestCase):
+class DjangoAbstractBaseSequenceTestCase(DjangoResetTestCase):
+
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
         obj = ConcreteSonFactory()
@@ -396,6 +480,8 @@ class DjangoAbstractBaseSequenceTestCase(django_test.TestCase):
         class ConcreteSonFactory(AbstractBaseFactory):
             class Meta:
                 model = models.ConcreteSon
+
+        self.reset_database_sequences(models.ConcreteSon)
 
         obj = ConcreteSonFactory()
         self.assertEqual(1, obj.pk)
@@ -1065,11 +1151,12 @@ class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
-            return 3
+            obj.non_existant_field = 3
 
     def test_create_warning(self):
         with self.assertWarns(DeprecationWarning) as cm:
-            self.StandardFactoryWithPost.create()
+            instance = self.StandardFactoryWithPost.create()
+            assert instance.non_existant_field == 3
 
         [msg] = cm.warning.args
         self.assertEqual(
