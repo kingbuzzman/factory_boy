@@ -412,23 +412,20 @@ class Collector:
 
         model = new_objs[0].__class__
 
-        def get_candidate_relations(opts):
-            # The candidate relations are the ones that come from N-1 and 1-1 relations.
-            # N-N  (i.e., many-to-many) relations aren't candidates for deletion.
-            return (
-                f
-                for f in opts.get_fields(include_hidden=True)
-                if isinstance(f, models.ForeignKey)
-            )
+        # The candidate relations are the ones that come from N-1 and 1-1 relations.
+        candidate_relations = (
+            f for f in model._meta.get_fields(include_hidden=True)
+            if isinstance(f, models.ForeignKey)
+        )
 
         collected_objs = []
-        for field in get_candidate_relations(model._meta):
+        for field in candidate_relations:
             for obj in new_objs:
                 val = getattr(obj, field.name)
                 if isinstance(val, models.Model):
                     collected_objs.append(val)
 
-        for name, _ in factory_cls._meta.post_declarations.as_dict().items():
+        for name, in factory_cls._meta.post_declarations.as_dict().keys():
             for obj in new_objs:
                 val = getattr(obj, name, None)
                 if isinstance(val, models.Model):
