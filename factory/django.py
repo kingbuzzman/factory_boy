@@ -24,7 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
-DJANGO_22 = Version('2.2') <= Version(django_version) < Version('3.0')
+DJANGO_22 = Version(django_version) < Version('3.0')
 
 _LAZY_LOADS = {}
 
@@ -205,9 +205,18 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def _refresh_database_pks(cls, model_cls, objs):
+        """
+        Before Django 3.0, there is an issue when bulk_insert.
+
+        The issue is that if you create an instance of a model,
+        and reference it in another unsaved instance of a model.
+        When you create the instance of the first one, the pk/id
+        is never updated on the sub model that referenced the first.
+        """
         if not DJANGO_22:
             return
-        fields = [f for f in model_cls._meta.get_fields() if isinstance(f, models.fields.related.ForeignObject)]
+        fields = [f for f in model_cls._meta.get_fields()
+                  if isinstance(f, models.fields.related.ForeignObject)]
         if not fields:
             return
         for obj in objs:
