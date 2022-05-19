@@ -231,12 +231,8 @@ class DjangoModelFactory(base.Factory):
         collector.sort()
         for model_cls, objs in collector.data.items():
             manager = cls._get_manager(model_cls)
-            for instance in objs:
-                models.signals.pre_save.send(model_cls, instance=instance, created=False)
             cls._refresh_database_pks(model_cls, objs)
             manager.bulk_create(objs)
-            for instance in objs:
-                models.signals.post_save.send(model_cls, instance=instance, created=True)
         return models_to_create
 
     @classmethod
