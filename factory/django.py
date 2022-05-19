@@ -340,18 +340,9 @@ class ImageField(FileField):
 
 
 class Collector:
-    def __init__(self, using):
-        self.using = using
+    def __init__(self):
         # Initially, {model: {instances}}, later values become lists.
         self.data = defaultdict(list)
-        # {model: {(field, value): {instances}}}
-        self.field_updates = defaultdict(functools.partial(defaultdict, set))
-        # {model: {field: {instances}}}
-        self.restricted_objects = defaultdict(functools.partial(defaultdict, set))
-        # fast_deletes is a list of queryset-likes that can be deleted without
-        # fetching the objects into memory.
-        self.fast_deletes = []
-
         # Tracks deletion-order dependency for databases without transactions
         # or ability to defer constraint checks. Only concrete model classes
         # should be included, as the dependencies exist only between actual
@@ -361,7 +352,7 @@ class Collector:
 
     def add(self, objs, source=None, nullable=False, reverse_dependency=False):
         """
-        Add 'objs' to the collection of objects to be deleted.  If the call is
+        Add 'objs' to the collection of objects to be inserted in order.  If the call is
         the result of a cascade, 'source' should be the model that caused it,
         and 'nullable' should be set to True if the relation can be null.
         Return a list of all objects that were not already collected.
@@ -377,16 +368,12 @@ class Collector:
                 continue
             if id(obj) not in lookup:
                 new_objs.append(obj)
-        # import ipdb; ipdb.sset_trace()
         instances.extend(new_objs)
         # Nullable relationships can be ignored -- they are nulled out before
         # deleting, and therefore do not affect the order in which objects have
         # to be deleted.
         if source is not None and not nullable:
             self.add_dependency(source, model, reverse_dependency=reverse_dependency)
-        # if not nullable:
-        #     import ipdb; ipdb.sset_trace()
-        #     self.add_dependency(source, model, reverse_dependency=reverse_dependency)
         return new_objs
 
     def add_dependency(self, model, dependency, reverse_dependency=False):
@@ -403,11 +390,7 @@ class Collector:
         objs,
         source=None,
         nullable=False,
-        collect_related=True,
-        source_attr=None,
         reverse_dependency=False,
-        keep_parents=False,
-        fail_on_restricted=True,
     ):
         """
         Add 'objs' to the collection of objects to be deleted as well as all
@@ -434,7 +417,6 @@ class Collector:
         if not new_objs:
             return
 
-        # import ipdb; ipdb.sset_trace()
         model = new_objs[0].__class__
 
         def get_candidate_relations(opts):
@@ -454,7 +436,6 @@ class Collector:
                     collected_objs.append(val)
 
         for name, _ in factory_cls._meta.post_declarations.as_dict().items():
-
             for obj in new_objs:
                 val = getattr(obj, name, None)
                 if isinstance(val, models.Model):
@@ -466,10 +447,15 @@ class Collector:
             )
 
     def sort(self):
+        """
+        Sort the model instances by the least dependecies to the most dependencies.
+
+        We want to insert the models with no dependencies first, and continue inserting
+        using the models that the higher models depend on.
+        """
         sorted_models = []
         concrete_models = set()
         models = list(self.data)
-        # import ipdb; ipdb.sset_trace()
         while len(sorted_models) < len(models):
             found = False
             for model in models:
@@ -481,6 +467,7 @@ class Collector:
                     concrete_models.add(model._meta.concrete_model)
                     found = True
             if not found:
+                logger.debug('dependency order could not be determined')
                 return
         self.data = {model: self.data[model] for model in sorted_models}
 
