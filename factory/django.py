@@ -226,7 +226,7 @@ class DjangoModelFactory(base.Factory):
     @classmethod
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
-        collector = Collector(cls._meta.database)
+        collector = Collector()
         collector.collect(cls, models_to_create)
         collector.sort()
         for model_cls, objs in collector.data.items():
@@ -350,7 +350,7 @@ class Collector:
         # parent.
         self.dependencies = defaultdict(set)  # {model: {models}}
 
-    def add(self, objs, source=None, nullable=False, reverse_dependency=False):
+    def add(self, objs, source=None, nullable=False):
         """
         Add 'objs' to the collection of objects to be inserted in order.  If the call is
         the result of a cascade, 'source' should be the model that caused it,
@@ -373,12 +373,10 @@ class Collector:
         # deleting, and therefore do not affect the order in which objects have
         # to be deleted.
         if source is not None and not nullable:
-            self.add_dependency(source, model, reverse_dependency=reverse_dependency)
+            self.add_dependency(source, model)
         return new_objs
 
-    def add_dependency(self, model, dependency, reverse_dependency=False):
-        if reverse_dependency:
-            model, dependency = dependency, model
+    def add_dependency(self, model, dependency):
         self.dependencies[model._meta.concrete_model].add(
             dependency._meta.concrete_model
         )
@@ -390,7 +388,6 @@ class Collector:
         objs,
         source=None,
         nullable=False,
-        reverse_dependency=False,
     ):
         """
         Add 'objs' to the collection of objects to be deleted as well as all
@@ -400,10 +397,6 @@ class Collector:
         If the call is the result of a cascade, 'source' should be the model
         that caused it and 'nullable' should be set to True, if the relation
         can be null.
-        If 'reverse_dependency' is True, 'source' will be deleted before the
-        current model, rather than after. (Needed for cascading to parent
-        models, the one case in which the cascade follows the forwards
-        direction of an FK rather than the reverse direction.)
         If 'keep_parents' is True, data of parent model's will be not deleted.
         If 'fail_on_restricted' is False, error won't be raised even if it's
         prohibited to delete such objects due to RESTRICT, that defers
@@ -412,7 +405,7 @@ class Collector:
         can be deleted.
         """
         new_objs = self.add(
-            objs, source, nullable, reverse_dependency=reverse_dependency
+            objs, source, nullable
         )
         if not new_objs:
             return
@@ -443,7 +436,7 @@ class Collector:
 
         if collected_objs:
             new_objs = self.collect(
-                factory_cls=factory_cls, objs=collected_objs, source=model, reverse_dependency=False
+                factory_cls=factory_cls, objs=collected_objs, source=model
             )
 
     def sort(self):
