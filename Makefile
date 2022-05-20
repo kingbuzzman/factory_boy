@@ -77,7 +77,7 @@ lint:
 	$(FLAKE8) --exclude $(PACKAGE)/__init__.py $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
 	$(FLAKE8) --ignore F401 $(PACKAGE)/__init__.py
 	$(ISORT) --check-only --diff $(EXAMPLES_DIR) $(PACKAGE) $(SETUP_PY) $(TESTS_DIR)
-	check-manifest
+	check-manifest --ignore docker-compose.yml
 
 coverage:
 	$(COVERAGE) erase
