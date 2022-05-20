@@ -48,14 +48,14 @@ services:
     environment:
       - PYENV_NAME=py310
 
+  pypy37:
+    <<: *pyenv
+    image: pypy:3.7
+    environment:
+      - PYENV_NAME=pypy37
+
   pypy38:
     <<: *pyenv
     image: pypy:3.8
     environment:
       - PYENV_NAME=pypy38
-
-  pypy39:
-    <<: *pyenv
-    image: pypy:3.9
-    environment:
-      - PYENV_NAME=pypy39
