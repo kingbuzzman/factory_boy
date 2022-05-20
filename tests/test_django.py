@@ -151,35 +151,26 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
-class Level2Factory(factory.django.DjangoModelFactory):
+class PFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = models.Level2
+        model = models.P
         use_bulk_create = True
 
-    foo = factory.Sequence(lambda n: "foo%s" % n)
 
-
-class LevelA1Factory(factory.django.DjangoModelFactory):
+class RFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = models.LevelA1
+        model = models.R
         use_bulk_create = True
 
-    level_2 = factory.SubFactory(Level2Factory)
-
-
-class LevelA2Factory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = models.LevelA2
-        use_bulk_create = True
-
-    level_2 = factory.SubFactory(Level2Factory)
+    is_default = True
+    p = factory.SubFactory(PFactory)
 
 
 class DependencyInsertOrderCollector(django_test.TestCase):
 
     def test_empty(self):
         collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect(Level2Factory, [])
+        collector.collect(PFactory, [])
         collector.sort()
 
         self.assertEqual(collector.data, {})
@@ -190,27 +181,27 @@ class DjangoBulkInsert(django_test.TestCase):
 
     def test_single_object_create(self):
         with self.assertNumQueries(1):
-            Level2Factory()
+            PFactory()
 
     def test_single_object_create_batch(self):
         with self.assertNumQueries(1):
-            Level2Factory.create_batch(10)
+            PFactory.create_batch(10)
 
     def test_one_level_nested_single_object_create(self):
         with self.assertNumQueries(2):
-            LevelA1Factory()
+            RFactory()
 
-        existing_level2 = Level2Factory()
+        existing_p = PFactory()
         with self.assertNumQueries(1):
-            LevelA1Factory(level_2=existing_level2)
+            RFactory(p=existing_p)
 
     def test_one_level_nested_single_object_create_batch(self):
         with self.assertNumQueries(2):
-            LevelA1Factory.create_batch(10)
+            RFactory.create_batch(10)
 
-        existing_level2 = Level2Factory()
+        existing_p = PFactory()
         with self.assertNumQueries(1):
-            LevelA1Factory.create_batch(10, level_2=existing_level2)
+            RFactory.create_batch(10, p=existing_p)
 
 
 class ModelTests(django_test.TestCase):
