@@ -2,16 +2,21 @@
 
 """Tests for factory_boy/Django interactions."""
 
+import inspect
 import io
 import os
+import tempfile
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 import django
 from django import test as django_test
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
-from django.core.management.color import no_style
+from django.core.management import call_command, color
+from django.core.management.commands.migrate import Command as MigrateCommand
 from django.db import connections
 from django.db.models import signals
 from django.test import utils as django_test_utils
@@ -38,17 +43,41 @@ SKIP_BULK_INSERT = not factory.django.connection_supports_bulk_insert(factory.dj
 from .djapp import models  # noqa:E402 isort:skip
 
 test_state = {}
+cleanup = ExitStack()
 
 
 def setUpModule():
-    django_test_utils.setup_test_environment()
-    runner_state = django_test_utils.setup_databases(verbosity=0, interactive=False)
-    test_state['runner_state'] = runner_state
+    project_path = os.path.abspath(os.curdir)
+
+    for app_config in apps.get_app_configs():
+        module = app_config.module
+        app_path = os.path.dirname(os.path.abspath(inspect.getsourcefile(module)))
+
+        if app_path.startswith(project_path):
+            temp_dir = cleanup.enter_context(tempfile.TemporaryDirectory(prefix='migrations_', dir=app_path))
+            # Need to make this directory a proper python module otherwise django will refuse to recognize it
+            open(os.path.join(temp_dir, '__init__.py'), 'a').close()
+            settings.MIGRATION_MODULES[app_config.label] = '%s.%s' % (app_config.module.__name__,
+                                                                      os.path.basename(temp_dir))
+
+    def WrappedMigrateCommand(*args, **kwargs):
+        """
+        Because we're using django's `contenttypes` there is no way to get the migrations to work properly
+        """
+        for app in settings.MIGRATION_MODULES:
+            call_command('makemigrations', name=app, verbosity=0)
+        return MigrateCommand(*args, **kwargs)
+
+    with mock.patch('django.core.management.commands.migrate.Command', wraps=WrappedMigrateCommand):
+        django_test_utils.setup_test_environment()
+        runner_state = django_test_utils.setup_databases(verbosity=0, interactive=False)
+        test_state['runner_state'] = runner_state
 
 
 def tearDownModule():
     django_test_utils.teardown_databases(test_state['runner_state'], verbosity=0)
     django_test_utils.teardown_test_environment()
+    cleanup.close()
 
 
 class StandardFactory(factory.django.DjangoModelFactory):
@@ -229,7 +258,7 @@ class DjangoResetTestCase(django_test.TestCase):
     def reset_database_sequences(self, *models):
         using = factory.django.DEFAULT_DB_ALIAS
         with connections[using].cursor() as cursor:
-            sequence_sql = connections[using].ops.sequence_reset_sql(no_style(), models)
+            sequence_sql = connections[using].ops.sequence_reset_sql(color.no_style(), models)
             for command in sequence_sql:
                 cursor.execute(command)
 
