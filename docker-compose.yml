@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+
+  mongo:
+    image: mongo
+    command: mongod --quiet --logpath /dev/null
+
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=password
+
+  py37: &pyenv
+    image: python:3.7
+    volumes:
+      - .:/factory_boy
+    depends_on:
+      - mongo
+      - postgres
+    environment:
+      - PYENV_NAME=py37
+    command: >
+      bash -c '
+      apt update &&
+      DEBIAN_FRONTEND=noninteractive apt install -y build-essential &&
+      cp -r factory_boy factory_boy_$$PYENV_NAME &&
+      cd factory_boy_$$PYENV_NAME &&
+      pip install -U pip tox tox-factor &&
+      MONGO_HOST=mongo POSTGRES_HOST=postgres POSTGRES_NAME=factory_boy_$$PYENV_NAME tox --workdir /tmp/.tox -f $$PYENV_NAME
+      '
+
+  py38:
+    <<: *pyenv
+    image: python:3.8
+    environment:
+      - PYENV_NAME=py38
+
+  py39:
+    <<: *pyenv
+    image: python:3.9
+    environment:
+      - PYENV_NAME=py39
+
+  py310:
+    <<: *pyenv
+    image: python:3.10
+    environment:
+      - PYENV_NAME=py310
+
+  pypy38:
+    <<: *pyenv
+    image: pypy:3.8
+    environment:
+      - PYENV_NAME=pypy38
+
+  pypy39:
+    <<: *pyenv
+    image: pypy:3.9
+    environment:
+      - PYENV_NAME=pypy39
