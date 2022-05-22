@@ -229,7 +229,7 @@ class DjangoModelFactory(base.Factory):
         collector = DependencyInsertOrderCollector()
         collector.collect(cls, models_to_create)
         collector.sort()
-        for model_cls, objs in collector.data.items():
+        for model_cls, objs in collector.sorted_data:
             manager = cls._get_manager(model_cls)
             cls._refresh_database_pks(model_cls, objs)
             manager.bulk_create(objs)
@@ -343,6 +343,8 @@ class DependencyInsertOrderCollector:
     def __init__(self):
         # Initially, {model: {instances}}, later values become lists.
         self.data = defaultdict(list)
+        # Initially, empty list [(model, [instances])]
+        self.sorted_data = []
         # Tracks deletion-order dependency for databases without transactions
         # or ability to defer constraint checks. Only concrete model classes
         # should be included, as the dependencies exist only between actual
@@ -438,7 +440,7 @@ class DependencyInsertOrderCollector:
 
     def sort(self):
         """
-        Sort the model instances by the least dependecies to the most dependencies.
+        Sort the model instances by the least dependencies to the most dependencies.
 
         We want to insert the models with no dependencies first, and continue inserting
         using the models that the higher models depend on.
@@ -459,7 +461,7 @@ class DependencyInsertOrderCollector:
             if not found:
                 logger.debug('dependency order could not be determined')
                 return
-        self.data = {model: self.data[model] for model in sorted_models}
+        self.sorted_data = [(model, self.data[model]) for model in sorted_models]
 
 
 class mute_signals:

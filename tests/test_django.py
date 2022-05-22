@@ -195,6 +195,58 @@ class RFactory(factory.django.DjangoModelFactory):
     p = factory.SubFactory(PFactory)
 
 
+class RChildFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.RChild
+        use_bulk_create = True
+
+
+class SFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.S
+        use_bulk_create = True
+
+    r = factory.SubFactory(RFactory)
+
+
+class TFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.T
+        use_bulk_create = True
+
+    s = factory.SubFactory(SFactory)
+
+
+class UFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.U
+        use_bulk_create = True
+
+    t = factory.SubFactory(TFactory)
+
+
+class AFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.U
+        use_bulk_create = True
+
+    name = 'test'
+    auto = factory.SubFactory(RFactory)
+    auto_nullable = factory.SubFactory(RFactory)
+    setvalue = factory.SubFactory(RFactory)
+    setnull = factory.SubFactory(RFactory)
+    setdefault = factory.SubFactory(RFactory)
+    setdefault_none = factory.SubFactory(RFactory)
+    cascade = factory.SubFactory(RFactory)
+    cascade_nullable = factory.SubFactory(RFactory)
+    protect = factory.SubFactory(RFactory)
+    donothing = factory.SubFactory(RFactory)
+    child = factory.SubFactory(RChildFactory)
+    child_setnull = factory.SubFactory(RChildFactory)
+    cascade_p = factory.SubFactory(PFactory)
+    o2o_setnull = factory.SubFactory(RFactory)
+
+
 class DependencyInsertOrderCollector(django_test.TestCase):
 
     def test_empty(self):
@@ -202,7 +254,32 @@ class DependencyInsertOrderCollector(django_test.TestCase):
         collector.collect(PFactory, [])
         collector.sort()
 
-        self.assertEqual(collector.data, {})
+        self.assertEqual(collector.sorted_data, [])
+
+    def test_sub_create(self):
+        p1 = models.P()
+        p2 = models.P()
+        r1 = models.R(p=p1)
+        r2 = models.R(p=p2)
+        collector = factory.django.DependencyInsertOrderCollector()
+        collector.collect(RFactory, [r1, r2])
+        collector.sort()
+
+        self.assertEqual(collector.sorted_data, [(models.P, [p1, p2]), (models.R, [r1, r2])])
+
+    def test_sub_all_ready_created(self):
+        p1 = PFactory()
+        p2 = models.P()
+        r1 = models.R(p=p1)
+        r2 = models.R(p=p2)
+        r3 = RFactory()
+        collector = factory.django.DependencyInsertOrderCollector()
+        collector.collect(RFactory, [r1, r2, r3])
+        collector.sort()
+
+        # Note that `p1` is ignored completely since it was created already
+        # Note that `r3` along with `r3.p` is ignored completely since it was created already
+        self.assertEqual(collector.sorted_data, [(models.P, [p2]), (models.R, [r1, r2])])
 
 
 @unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")

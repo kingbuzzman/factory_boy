@@ -166,10 +166,6 @@ class RChild(R):
     pass
 
 
-class RChildChild(RChild):
-    pass
-
-
 class A(models.Model):
     name = models.CharField(max_length=30)
 
@@ -239,20 +235,6 @@ class MRNull(models.Model):
     r = models.ForeignKey(R, models.SET_NULL, null=True)
 
 
-class Avatar(models.Model):
-    desc = models.TextField(null=True)
-
-
-# This model is used to test a duplicate query regression (#25685)
-class AvatarProxy(Avatar):
-    class Meta:
-        proxy = True
-
-
-class User(models.Model):
-    avatar = models.ForeignKey(Avatar, models.CASCADE, null=True)
-
-
 class HiddenUser(models.Model):
     r = models.ForeignKey(R, models.CASCADE, related_name="+")
 
@@ -267,39 +249,6 @@ class M2MTo(models.Model):
 
 class M2MFrom(models.Model):
     m2m = models.ManyToManyField(M2MTo)
-
-
-class Parent(models.Model):
-    pass
-
-
-class Child(Parent):
-    pass
-
-
-class Base(models.Model):
-    pass
-
-
-class RelToBase(models.Model):
-    base = models.ForeignKey(Base, models.DO_NOTHING, related_name="rels")
-
-
-class Origin(models.Model):
-    pass
-
-
-class Referrer(models.Model):
-    origin = models.ForeignKey(Origin, models.CASCADE)
-    unique_field = models.IntegerField(unique=True)
-    large_field = models.TextField()
-
-
-class SecondReferrer(models.Model):
-    referrer = models.ForeignKey(Referrer, models.CASCADE)
-    other_referrer = models.ForeignKey(
-        Referrer, models.CASCADE, to_field="unique_field", related_name="+"
-    )
 
 
 class DeleteTop(models.Model):
