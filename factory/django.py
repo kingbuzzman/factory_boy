@@ -227,7 +227,7 @@ class DjangoModelFactory(base.Factory):
     def _bulk_create(cls, size, **kwargs):
         models_to_create = cls.build_batch(size, **kwargs)
         collector = DependencyInsertOrderCollector()
-        collector.collect(cls, models_to_create)
+        collector.collect(models_to_create)
         collector.sort()
         for model_cls, objs in collector.sorted_data:
             manager = cls._get_manager(model_cls)
@@ -260,6 +260,9 @@ class DjangoModelFactory(base.Factory):
             )
             # Some post-generation hooks ran, and may have modified us.
             instance.save()
+        elif not create and results and cls.supports_bulk_insert():
+            for key, value in results.items():
+                setattr(instance, '_post__%s' % key, value)
 
 
 class Password(declarations.Transformer):
@@ -345,12 +348,6 @@ class DependencyInsertOrderCollector:
         self.data = defaultdict(list)
         # Initially, empty list [(model, [instances])]
         self.sorted_data = []
-        # Tracks deletion-order dependency for databases without transactions
-        # or ability to defer constraint checks. Only concrete model classes
-        # should be included, as the dependencies exist only between actual
-        # database tables; proxy models are represented here by their concrete
-        # parent.
-        self.dependencies = defaultdict(set)  # {model: {models}}
 
     def add(self, objs, source=None, nullable=False):
         """
@@ -375,18 +372,72 @@ class DependencyInsertOrderCollector:
         # deleting, and therefore do not affect the order in which objects have
         # to be deleted.
         if source is not None and not nullable:
-            self.add_dependency(source, model)
+            self.data.setdefault(model, self.data.default_factory())
         return new_objs
 
-    def add_dependency(self, model, dependency):
-        self.dependencies[model._meta.concrete_model].add(
-            dependency._meta.concrete_model
-        )
-        self.data.setdefault(dependency, self.data.default_factory())
+    def sort(self):
+        """This is almost the same function from django/core/serializers/__init__.py:sort_dependencies with a slight
+        modification on `if hasattr(rel_model, 'natural_key') and rel_model != model:` that was removed, so we have the
+        REAL dependency order. The original implementation was setup to only write to files in order if they had a know
+        dependency, we always want it in order regardless of the natural_key.
+        """
+
+        # Process the list of models, and get the list of dependencies
+        model_dependencies = []
+        models = set()
+
+        for model in self.data.keys():
+            models.add(model)
+            deps = set()
+
+            # Now add a dependency for any FK relation with a model that
+            # defines a natural key
+            for field in model._meta.fields:
+                rel_model = field.related_model
+                if rel_model and rel_model != model:
+                    deps.add(rel_model)
+
+            model_dependencies.append((model, deps))
+
+        model_dependencies.reverse()
+        # Now sort the models to ensure that dependencies are met. This
+        # is done by repeatedly iterating over the input list of models.
+        # If all the dependencies of a given model are in the final list,
+        # that model is promoted to the end of the final list. This process
+        # continues until the input list is empty, or we do a full iteration
+        # over the input models without promoting a model to the final list.
+        # If we do a full iteration without a promotion, that means there are
+        # circular dependencies in the list.
+        model_list = []
+        while model_dependencies:
+            skipped = []
+            changed = False
+            while model_dependencies:
+                model, deps = model_dependencies.pop()
+
+                # If all of the models in the dependency list are either already
+                # on the final model list, or not on the original serialization list,
+                # then we've found another model with all it's dependencies satisfied.
+                found = True
+                for candidate in ((d not in models or d in model_list) for d in deps):
+                    if not candidate:
+                        found = False
+                if found:
+                    model_list.append(model)
+                    changed = True
+                else:
+                    skipped.append((model, deps))
+            if not changed:
+                raise RuntimeError("Can't resolve dependencies for %s in serialized app list." %
+                    ', '.join('%s.%s' % (model._meta.app_label, model._meta.object_name)
+                    for model, deps in sorted(skipped, key=lambda obj: obj[0].__name__))
+                )
+            model_dependencies = skipped
+
+        self.sorted_data = [(model_cls, self.data[model_cls]) for model_cls in model_list]
 
     def collect(
         self,
-        factory_cls,
         objs,
         source=None,
         nullable=False,
@@ -414,54 +465,29 @@ class DependencyInsertOrderCollector:
 
         model = new_objs[0].__class__
 
-        # The candidate relations are the ones that come from N-1 and 1-1 relations.
-        candidate_relations = (
-            f for f in model._meta.get_fields(include_hidden=True)
-            if isinstance(f, models.ForeignKey)
-        )
+        def relations():
+            for field in model._meta.get_fields(include_hidden=True):
+                # The candidate relations are the ones that come from N-1 and 1-1 relations.
+                if isinstance(field, models.ForeignKey):
+                    yield field.name
+                elif isinstance(field, models.ManyToManyField):
+                    yield '_post__%s' % field.name
 
-        collected_objs = []
-        for field in candidate_relations:
+        collected_objs = defaultdict(list)
+        for field_name in relations():
             for obj in new_objs:
-                val = getattr(obj, field.name)
+                val = getattr(obj, field_name, [])
+                if isinstance(val, list):
+                    for o in val:
+                        if isinstance(o, models.Model):
+                            collected_objs[o.__class__].append(o)
                 if isinstance(val, models.Model):
-                    collected_objs.append(val)
+                    collected_objs[val.__class__].append(val)
 
-        for name, in factory_cls._meta.post_declarations.as_dict().keys():
-            for obj in new_objs:
-                val = getattr(obj, name, None)
-                if isinstance(val, models.Model):
-                    collected_objs.append(val)
-
-        if collected_objs:
-            new_objs = self.collect(
-                factory_cls=factory_cls, objs=collected_objs, source=model
+        for instances in collected_objs.values():
+            self.collect(
+                objs=instances, source=model
             )
-
-    def sort(self):
-        """
-        Sort the model instances by the least dependencies to the most dependencies.
-
-        We want to insert the models with no dependencies first, and continue inserting
-        using the models that the higher models depend on.
-        """
-        sorted_models = []
-        concrete_models = set()
-        models = list(self.data)
-        while len(sorted_models) < len(models):
-            found = False
-            for model in models:
-                if model in sorted_models:
-                    continue
-                dependencies = self.dependencies.get(model._meta.concrete_model)
-                if not (dependencies and dependencies.difference(concrete_models)):
-                    sorted_models.append(model)
-                    concrete_models.add(model._meta.concrete_model)
-                    found = True
-            if not found:
-                logger.debug('dependency order could not be determined')
-                return
-        self.sorted_data = [(model, self.data[model]) for model in sorted_models]
 
 
 class mute_signals:

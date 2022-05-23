@@ -225,33 +225,34 @@ class UFactory(factory.django.DjangoModelFactory):
     t = factory.SubFactory(TFactory)
 
 
-class AFactory(factory.django.DjangoModelFactory):
+class APFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = models.U
+        model = models.A.p_m.through
         use_bulk_create = True
 
-    name = 'test'
-    auto = factory.SubFactory(RFactory)
-    auto_nullable = factory.SubFactory(RFactory)
-    setvalue = factory.SubFactory(RFactory)
-    setnull = factory.SubFactory(RFactory)
-    setdefault = factory.SubFactory(RFactory)
-    setdefault_none = factory.SubFactory(RFactory)
-    cascade = factory.SubFactory(RFactory)
-    cascade_nullable = factory.SubFactory(RFactory)
-    protect = factory.SubFactory(RFactory)
-    donothing = factory.SubFactory(RFactory)
-    child = factory.SubFactory(RChildFactory)
-    child_setnull = factory.SubFactory(RChildFactory)
-    cascade_p = factory.SubFactory(PFactory)
-    o2o_setnull = factory.SubFactory(RFactory)
+    a = factory.SubFactory('tests.test_django.AFactory')
+    p = factory.SubFactory(PFactory)
 
 
+class AFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.A
+        use_bulk_create = True
+
+    p_o = factory.SubFactory(PFactory)
+    p_f = factory.SubFactory(PFactory)
+
+
+class AWithMFactory(AFactory):
+    p_m = factory.RelatedFactoryList(APFactory, factory_related_name='a')
+
+
+@unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
 class DependencyInsertOrderCollector(django_test.TestCase):
 
     def test_empty(self):
         collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect(PFactory, [])
+        collector.collect([])
         collector.sort()
 
         self.assertEqual(collector.sorted_data, [])
@@ -262,7 +263,7 @@ class DependencyInsertOrderCollector(django_test.TestCase):
         r1 = models.R(p=p1)
         r2 = models.R(p=p2)
         collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect(RFactory, [r1, r2])
+        collector.collect([r1, r2])
         collector.sort()
 
         self.assertEqual(collector.sorted_data, [(models.P, [p1, p2]), (models.R, [r1, r2])])
@@ -274,12 +275,27 @@ class DependencyInsertOrderCollector(django_test.TestCase):
         r2 = models.R(p=p2)
         r3 = RFactory()
         collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect(RFactory, [r1, r2, r3])
+        collector.collect([r1, r2, r3])
         collector.sort()
 
         # Note that `p1` is ignored completely since it was created already
         # Note that `r3` along with `r3.p` is ignored completely since it was created already
         self.assertEqual(collector.sorted_data, [(models.P, [p2]), (models.R, [r1, r2])])
+
+    def test_new_m2m(self):
+        a1 = AWithMFactory.build()
+        p1 = a1.p_o
+        p2 = a1.p_f
+        p_m1, p_m2 = a1._post__p_m
+        p3 = p_m1.p
+        p4 = p_m2.p
+        collector = factory.django.DependencyInsertOrderCollector()
+        collector.collect([a1])
+        collector.sort()
+
+        self.assertEqual(collector.sorted_data, [(models.P, [p1, p2, p3, p4]),
+                                                 (models.A, [a1]),
+                                                 (models.A.p_m.through, [p_m1, p_m2])])
 
 
 @unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
@@ -308,6 +324,14 @@ class DjangoBulkInsert(django_test.TestCase):
         existing_p = PFactory()
         with self.assertNumQueries(1):
             RFactory.create_batch(10, p=existing_p)
+
+    def test_one_level_nested_m2m_create_batch(self):
+        with self.assertNumQueries(3):
+            AWithMFactory.create_batch(10)
+
+        existing_p = PFactory()
+        with self.assertNumQueries(3):
+            AWithMFactory.create_batch(10, p_f=existing_p)
 
 
 class ModelTests(django_test.TestCase):
