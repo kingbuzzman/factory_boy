@@ -428,10 +428,10 @@ class DependencyInsertOrderCollector:
                 else:
                     skipped.append((model, deps))
             if not changed:
-                raise RuntimeError("Can't resolve dependencies for %s in serialized app list." %
-                    ', '.join('%s.%s' % (model._meta.app_label, model._meta.object_name)
-                    for model, deps in sorted(skipped, key=lambda obj: obj[0].__name__))
-                )
+                unresolved_models = (f'{model._meta.app_label}.{model._meta.object_name}'
+                                     for model, _ in sorted(skipped, key=lambda obj: obj[0].__name__))
+                message = f"Can't resolve dependencies for {', '.join(unresolved_models)}."
+                raise RuntimeError(message)
             model_dependencies = skipped
 
         self.sorted_data = [(model_cls, self.data[model_cls]) for model_cls in model_list]
