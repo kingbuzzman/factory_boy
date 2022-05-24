@@ -235,6 +235,7 @@ class StepBuilder:
         self.strategy = strategy
         self.extras = extras
         self.force_init_sequence = extras.pop('__sequence', None)
+        self.created_instances = []
 
     def build(self, parent_step=None, force_sequence=None):
         """Build a factory instance."""
@@ -244,6 +245,13 @@ class StepBuilder:
             base_pre=self.factory_meta.pre_declarations,
             base_post=self.factory_meta.post_declarations,
         )
+
+        # TODO: come up with a better solution
+        if parent_step:
+            if hasattr(parent_step, 'builder'):
+                self.created_instances = parent_step.builder.created_instances
+            else:
+                self.created_instances = parent_step.created_instances
 
         if force_sequence is not None:
             sequence = force_sequence
@@ -280,6 +288,9 @@ class StepBuilder:
             step=step,
             results=postgen_results,
         )
+
+        self.created_instances.append(instance)
+
         return instance
 
     def recurse(self, factory_meta, extras):

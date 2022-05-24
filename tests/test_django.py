@@ -22,6 +22,7 @@ from django.db.models import signals
 from django.test import utils as django_test_utils
 from faker import Factory as FakerFactory
 
+import factory
 import factory.django
 
 from . import testdata
@@ -247,26 +248,29 @@ class AWithMFactory(AFactory):
     p_m = factory.RelatedFactoryList(APFactory, factory_related_name='a')
 
 
-@unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
-class DependencyInsertOrderCollector(django_test.TestCase):
+class AAFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = models.AA
+        use_bulk_create = True
+
+    a = factory.SubFactory(AWithMFactory)
+    u = factory.SubFactory(UFactory)
+    p = factory.SubFactory(PFactory)
+
+
+class DependencyInsertOrderTest(django_test.TestCase):
 
     def test_empty(self):
-        collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect([])
-        collector.sort()
-
-        self.assertEqual(collector.sorted_data, [])
+        actual = factory.django.dependency_insert_order([])
+        self.assertEqual(actual, [])
 
     def test_sub_create(self):
         p1 = models.P()
         p2 = models.P()
         r1 = models.R(p=p1)
         r2 = models.R(p=p2)
-        collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect([r1, r2])
-        collector.sort()
-
-        self.assertEqual(collector.sorted_data, [(models.P, [p1, p2]), (models.R, [r1, r2])])
+        actual = factory.django.dependency_insert_order([r1, r2, p1, p2])
+        self.assertEqual(actual, [(models.P, [p1, p2]), (models.R, [r1, r2])])
 
     def test_sub_all_ready_created(self):
         p1 = PFactory()
@@ -274,32 +278,28 @@ class DependencyInsertOrderCollector(django_test.TestCase):
         r1 = models.R(p=p1)
         r2 = models.R(p=p2)
         r3 = RFactory()
-        collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect([r1, r2, r3])
-        collector.sort()
+        actual = factory.django.dependency_insert_order([p1, p2, r1, r2, r3])
 
         # Note that `p1` is ignored completely since it was created already
         # Note that `r3` along with `r3.p` is ignored completely since it was created already
-        self.assertEqual(collector.sorted_data, [(models.P, [p2]), (models.R, [r1, r2])])
+        self.assertEqual(actual, [(models.P, [p2]), (models.R, [r1, r2])])
 
     def test_new_m2m(self):
-        a1 = AWithMFactory.build()
+        step = factory.builder.StepBuilder(AWithMFactory._meta, {}, factory.enums.BUILD_STRATEGY)
+        a1 = step.build()
         p1 = a1.p_o
         p2 = a1.p_f
-        p_m1, p_m2 = a1._post__p_m
+        p_m1, p_m2 = [x for x in step.created_instances if isinstance(x, models.A.p_m.through)]
         p3 = p_m1.p
         p4 = p_m2.p
-        collector = factory.django.DependencyInsertOrderCollector()
-        collector.collect([a1])
-        collector.sort()
-
-        self.assertEqual(collector.sorted_data, [(models.P, [p1, p2, p3, p4]),
-                                                 (models.A, [a1]),
-                                                 (models.A.p_m.through, [p_m1, p_m2])])
+        actual = factory.django.dependency_insert_order(step.created_instances)
+        self.assertEqual(actual, [(models.P, [p1, p2, p3, p4]),
+                                  (models.A, [a1]),
+                                  (models.A.p_m.through, [p_m1, p_m2])])
 
 
 @unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
-class DjangoBulkInsert(django_test.TestCase):
+class DjangoBulkInsertTest(django_test.TestCase):
 
     def test_single_object_create(self):
         with self.assertNumQueries(1):
@@ -332,6 +332,10 @@ class DjangoBulkInsert(django_test.TestCase):
         existing_p = PFactory()
         with self.assertNumQueries(3):
             AWithMFactory.create_batch(10, p_f=existing_p)
+
+    def test_multi_level_nested_m2m_create_batch(self):
+        with self.assertNumQueries(8):
+            AAFactory.create_batch(10)
 
 
 class ModelTests(django_test.TestCase):

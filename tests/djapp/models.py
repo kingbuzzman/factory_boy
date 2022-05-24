@@ -172,6 +172,12 @@ class A(models.Model):
     p_m = models.ManyToManyField('P')
 
 
+class AA(models.Model):
+    a = models.OneToOneField(A, models.CASCADE)
+    u = models.OneToOneField(U, models.CASCADE)
+    p = models.OneToOneField(P, models.CASCADE)
+
+
 class B(models.Model):
     protect = models.ForeignKey(R, models.PROTECT)
 

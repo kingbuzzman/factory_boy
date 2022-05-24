@@ -17,7 +17,7 @@ from django.core import files as django_files
 from django.db import IntegrityError, connections, models
 from packaging.version import Version
 
-from . import base, declarations, errors
+from . import base, builder, declarations, enums, errors
 
 logger = logging.getLogger('factory.generate')
 
@@ -225,15 +225,25 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def _bulk_create(cls, size, **kwargs):
-        models_to_create = cls.build_batch(size, **kwargs)
-        collector = DependencyInsertOrderCollector()
-        collector.collect(models_to_create)
-        collector.sort()
-        for model_cls, objs in collector.sorted_data:
+        if cls._meta.abstract:
+            raise errors.FactoryError(
+                "Cannot generate instances of abstract factory %(f)s; "
+                "Ensure %(f)s.Meta.model is set and %(f)s.Meta.abstract "
+                "is either not set or False." % dict(f=cls.__name__))
+
+        models_to_return = []
+        instances_created = []
+        for _ in range(size):
+            step = builder.StepBuilder(cls._meta, kwargs, enums.BUILD_STRATEGY)
+            models_to_return.append(step.build())
+            instances_created.extend(step.created_instances)
+
+        for model_cls, objs in dependency_insert_order(instances_created):
             manager = cls._get_manager(model_cls)
             cls._refresh_database_pks(model_cls, objs)
             manager.bulk_create(objs)
-        return models_to_create
+        # return models_to_create
+        return models_to_return
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
@@ -260,9 +270,6 @@ class DjangoModelFactory(base.Factory):
             )
             # Some post-generation hooks ran, and may have modified us.
             instance.save()
-        elif not create and results and cls.supports_bulk_insert():
-            for key, value in results.items():
-                setattr(instance, '_post__%s' % key, value)
 
 
 class Password(declarations.Transformer):
@@ -342,152 +349,80 @@ class ImageField(FileField):
         return thumb_io.getvalue()
 
 
-class DependencyInsertOrderCollector:
-    def __init__(self):
-        # Initially, {model: {instances}}, later values become lists.
-        self.data = defaultdict(list)
-        # Initially, empty list [(model, [instances])]
-        self.sorted_data = []
+def dependency_insert_order(data):
+    """This is almost the same function from django/core/serializers/__init__.py:sort_dependencies with a slight
+    modification on `if hasattr(rel_model, 'natural_key') and rel_model != model:` that was removed, so we have the
+    REAL dependency order. The original implementation was setup to only write to files in order if they had a know
+    dependency, we always want it in order regardless of the natural_key.
+    """
 
-    def add(self, objs, source=None, nullable=False):
-        """
-        Add 'objs' to the collection of objects to be inserted in order.  If the call is
-        the result of a cascade, 'source' should be the model that caused it,
-        and 'nullable' should be set to True if the relation can be null.
-        Return a list of all objects that were not already collected.
-        """
-        if not objs:
-            return []
-        new_objs = []
-        model = objs[0].__class__
-        instances = self.data[model]
-        lookup = [id(instance) for instance in instances]
-        for obj in objs:
-            if not obj._state.adding:
-                continue
-            if id(obj) not in lookup:
-                new_objs.append(obj)
-        instances.extend(new_objs)
-        # Nullable relationships can be ignored -- they are nulled out before
-        # deleting, and therefore do not affect the order in which objects have
-        # to be deleted.
-        if source is not None and not nullable:
-            self.data.setdefault(model, self.data.default_factory())
-        return new_objs
+    lookup = []
+    model_cls_by_data = defaultdict(list)
+    for instance in data:
+        # Instance has been persisted in the database
+        if not instance._state.adding:
+            continue
+        # Instance already in the list
+        if id(instance) in lookup:
+            continue
+        model_cls_by_data[type(instance)].append(instance)
 
-    def sort(self):
-        """This is almost the same function from django/core/serializers/__init__.py:sort_dependencies with a slight
-        modification on `if hasattr(rel_model, 'natural_key') and rel_model != model:` that was removed, so we have the
-        REAL dependency order. The original implementation was setup to only write to files in order if they had a know
-        dependency, we always want it in order regardless of the natural_key.
-        """
+    # Avoid data leaks
+    del lookup
+    del data
 
-        # Process the list of models, and get the list of dependencies
-        model_dependencies = []
-        models = set()
+    # Process the list of models, and get the list of dependencies
+    model_dependencies = []
+    models = list(model_cls_by_data.keys())
 
-        for model in self.data.keys():
-            models.add(model)
-            deps = set()
+    for model in models:
+        deps = set()
 
-            # Now add a dependency for any FK relation with a model that
-            # defines a natural key
-            for field in model._meta.fields:
-                rel_model = field.related_model
-                if rel_model and rel_model != model:
-                    deps.add(rel_model)
+        # Now add a dependency for any FK relation with a model that
+        # defines a natural key
+        for field in model._meta.fields:
+            rel_model = field.related_model
+            if rel_model and rel_model != model:
+                deps.add(rel_model)
 
-            model_dependencies.append((model, deps))
+        model_dependencies.append((model, deps))
 
-        model_dependencies.reverse()
-        # Now sort the models to ensure that dependencies are met. This
-        # is done by repeatedly iterating over the input list of models.
-        # If all the dependencies of a given model are in the final list,
-        # that model is promoted to the end of the final list. This process
-        # continues until the input list is empty, or we do a full iteration
-        # over the input models without promoting a model to the final list.
-        # If we do a full iteration without a promotion, that means there are
-        # circular dependencies in the list.
-        model_list = []
+    model_dependencies.reverse()
+    # Now sort the models to ensure that dependencies are met. This
+    # is done by repeatedly iterating over the input list of models.
+    # If all the dependencies of a given model are in the final list,
+    # that model is promoted to the end of the final list. This process
+    # continues until the input list is empty, or we do a full iteration
+    # over the input models without promoting a model to the final list.
+    # If we do a full iteration without a promotion, that means there are
+    # circular dependencies in the list.
+    model_list = []
+    while model_dependencies:
+        skipped = []
+        changed = False
         while model_dependencies:
-            skipped = []
-            changed = False
-            while model_dependencies:
-                model, deps = model_dependencies.pop()
+            model, deps = model_dependencies.pop()
 
-                # If all of the models in the dependency list are either already
-                # on the final model list, or not on the original serialization list,
-                # then we've found another model with all it's dependencies satisfied.
-                found = True
-                for candidate in ((d not in models or d in model_list) for d in deps):
-                    if not candidate:
-                        found = False
-                if found:
-                    model_list.append(model)
-                    changed = True
-                else:
-                    skipped.append((model, deps))
-            if not changed:
-                unresolved_models = (f'{model._meta.app_label}.{model._meta.object_name}'
-                                     for model, _ in sorted(skipped, key=lambda obj: obj[0].__name__))
-                message = f"Can't resolve dependencies for {', '.join(unresolved_models)}."
-                raise RuntimeError(message)
-            model_dependencies = skipped
+            # If all of the models in the dependency list are either already
+            # on the final model list, or not on the original serialization list,
+            # then we've found another model with all it's dependencies satisfied.
+            found = True
+            for candidate in ((d not in models or d in model_list) for d in deps):
+                if not candidate:
+                    found = False
+            if found:
+                model_list.append(model)
+                changed = True
+            else:
+                skipped.append((model, deps))
+        if not changed:
+            unresolved_models = (f'{model._meta.app_label}.{model._meta.object_name}'
+                                 for model, _ in sorted(skipped, key=lambda obj: obj[0].__name__))
+            message = f"Can't resolve dependencies for {', '.join(unresolved_models)}."
+            raise RuntimeError(message)
+        model_dependencies = skipped
 
-        self.sorted_data = [(model_cls, self.data[model_cls]) for model_cls in model_list]
-
-    def collect(
-        self,
-        objs,
-        source=None,
-        nullable=False,
-    ):
-        """
-        Add 'objs' to the collection of objects to be deleted as well as all
-        parent instances.  'objs' must be a homogeneous iterable collection of
-        model instances (e.g. a QuerySet).  If 'collect_related' is True,
-        related objects will be handled by their respective on_delete handler.
-        If the call is the result of a cascade, 'source' should be the model
-        that caused it and 'nullable' should be set to True, if the relation
-        can be null.
-        If 'keep_parents' is True, data of parent model's will be not deleted.
-        If 'fail_on_restricted' is False, error won't be raised even if it's
-        prohibited to delete such objects due to RESTRICT, that defers
-        restricted object checking in recursive calls where the top-level call
-        may need to collect more objects to determine whether restricted ones
-        can be deleted.
-        """
-        new_objs = self.add(
-            objs, source, nullable
-        )
-        if not new_objs:
-            return
-
-        model = new_objs[0].__class__
-
-        def relations():
-            for field in model._meta.get_fields(include_hidden=True):
-                # The candidate relations are the ones that come from N-1 and 1-1 relations.
-                if isinstance(field, models.ForeignKey):
-                    yield field.name
-                elif isinstance(field, models.ManyToManyField):
-                    yield '_post__%s' % field.name
-
-        collected_objs = defaultdict(list)
-        for field_name in relations():
-            for obj in new_objs:
-                val = getattr(obj, field_name, [])
-                if isinstance(val, list):
-                    for o in val:
-                        if isinstance(o, models.Model):
-                            collected_objs[o.__class__].append(o)
-                if isinstance(val, models.Model):
-                    collected_objs[val.__class__].append(val)
-
-        for instances in collected_objs.values():
-            self.collect(
-                objs=instances, source=model
-            )
+    return [(model_cls, model_cls_by_data[model_cls]) for model_cls in model_list]
 
 
 class mute_signals:
