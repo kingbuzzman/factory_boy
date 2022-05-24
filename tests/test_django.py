@@ -34,7 +34,6 @@ except ImportError:
 
 faker = FakerFactory.create()
 
-
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
@@ -408,7 +407,7 @@ class DjangoPkSequenceTestCase(DjangoResetTestCase):
         self.assertEqual(11, std2.pk)
 
 
-class DjangoGetOrCreateTests(django_test.TestCase):
+class DjangoGetOrCreateTestCase(django_test.TestCase):
     def test_simple_call(self):
         obj1 = MultifieldModelFactory(slug='slug1')
         obj2 = MultifieldModelFactory(slug='slug1')
@@ -445,7 +444,7 @@ class DjangoGetOrCreateTests(django_test.TestCase):
         )
 
 
-class MultipleGetOrCreateFieldsTest(django_test.TestCase):
+class MultipleGetOrCreateFieldsTestCase(django_test.TestCase):
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
@@ -583,7 +582,6 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
 
 
 class DjangoAbstractBaseSequenceTestCase(DjangoResetTestCase):
-
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
         obj = ConcreteSonFactory()
@@ -1272,7 +1270,7 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         ObjFactory.create(arg='invalid')
 
 
-class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
+class DjangoModelFactoryDuplicateSaveDeprecationTestCase(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
