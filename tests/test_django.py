@@ -11,6 +11,8 @@ import django
 from django import test as django_test
 from django.conf import settings
 from django.contrib.auth.hashers import check_password
+from django.core.management import color
+from django.db import connections
 from django.db.models import signals
 from django.test import utils as django_test_utils
 from faker import Factory as FakerFactory
@@ -147,7 +149,7 @@ class WithMultipleGetOrCreateFieldsFactory(factory.django.DjangoModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
-class ModelTests(django_test.TestCase):
+class ModelTestCase(django_test.TestCase):
     databases = {'default', 'replica'}
 
     def test_unset_model(self):
@@ -168,7 +170,16 @@ class ModelTests(django_test.TestCase):
         self.assertEqual(obj, models.StandardModel.objects.using('replica').get())
 
 
-class DjangoPkSequenceTestCase(django_test.TestCase):
+class DjangoResetTestCase(django_test.TestCase):
+    def reset_database_sequences(self, *models):
+        using = factory.django.DEFAULT_DB_ALIAS
+        with connections[using].cursor() as cursor:
+            sequence_sql = connections[using].ops.sequence_reset_sql(color.no_style(), models)
+            for command in sequence_sql:
+                cursor.execute(command)
+
+
+class DjangoPkSequenceTestCase(DjangoResetTestCase):
     def setUp(self):
         super().setUp()
         StandardFactory.reset_sequence()
@@ -184,6 +195,8 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         self.assertEqual('foo1', std2.foo)
 
     def test_pk_creation(self):
+        self.reset_database_sequences(StandardFactory._meta.model)
+
         std1 = StandardFactory.create()
         self.assertEqual('foo0', std1.foo)
         self.assertEqual(1, std1.pk)
@@ -198,13 +211,15 @@ class DjangoPkSequenceTestCase(django_test.TestCase):
         self.assertEqual('foo0', std1.foo)  # sequence is unrelated to pk
         self.assertEqual(10, std1.pk)
 
+        self.reset_database_sequences(StandardFactory._meta.model)
+
         StandardFactory.reset_sequence()
         std2 = StandardFactory.create()
         self.assertEqual('foo0', std2.foo)
         self.assertEqual(11, std2.pk)
 
 
-class DjangoGetOrCreateTests(django_test.TestCase):
+class DjangoGetOrCreateTestCase(django_test.TestCase):
     def test_simple_call(self):
         obj1 = MultifieldModelFactory(slug='slug1')
         obj2 = MultifieldModelFactory(slug='slug1')
@@ -241,7 +256,7 @@ class DjangoGetOrCreateTests(django_test.TestCase):
         )
 
 
-class MultipleGetOrCreateFieldsTest(django_test.TestCase):
+class MultipleGetOrCreateFieldsTestCase(django_test.TestCase):
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
@@ -378,7 +393,8 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
         self.assertEqual('foo0', nonint2.pk)
 
 
-class DjangoAbstractBaseSequenceTestCase(django_test.TestCase):
+class DjangoAbstractBaseSequenceTestCase(DjangoResetTestCase):
+
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
         obj = ConcreteSonFactory()
@@ -400,6 +416,8 @@ class DjangoAbstractBaseSequenceTestCase(django_test.TestCase):
         class ConcreteSonFactory(AbstractBaseFactory):
             class Meta:
                 model = models.ConcreteSon
+
+        self.reset_database_sequences(models.ConcreteSon)
 
         obj = ConcreteSonFactory()
         self.assertEqual(1, obj.pk)
@@ -1065,7 +1083,7 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         ObjFactory.create(arg='invalid')
 
 
-class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
+class DjangoModelFactoryDuplicateSaveDeprecationTestCase(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
