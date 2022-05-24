@@ -139,10 +139,6 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
     def setUp(self):
         models.session.rollback()
 
-    def tearDown(self):
-        models.session.rollback()
-        models.session.close()
-
     def test_simple_call(self):
         obj1 = WithGetOrCreateFieldFactory(foo='foo1')
         obj2 = WithGetOrCreateFieldFactory(foo='foo1')
@@ -177,10 +173,6 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
 class MultipleGetOrCreateFieldsTest(unittest.TestCase):
     def setUp(self):
         models.session.rollback()
-
-    def tearDown(self):
-        models.session.rollback()
-        models.session.close()
 
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
