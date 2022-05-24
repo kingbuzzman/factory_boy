@@ -72,7 +72,7 @@ class MultifieldModelFactory(factory.django.DjangoModelFactory):
         model = models.MultifieldModel
         django_get_or_create = ['slug']
 
-    text = factory.Faker('text')
+    text = factory.LazyAttribute(lambda n: faker.text()[:20])
 
 
 class AbstractBaseFactory(factory.django.DjangoModelFactory):
@@ -1065,11 +1065,12 @@ class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
-            return 3
+            obj.non_existant_field = 3
 
     def test_create_warning(self):
         with self.assertWarns(DeprecationWarning) as cm:
-            self.StandardFactoryWithPost.create()
+            instance = self.StandardFactoryWithPost.create()
+            assert instance.non_existant_field == 3
 
         [msg] = cm.warning.args
         self.assertEqual(
