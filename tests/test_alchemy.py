@@ -13,6 +13,32 @@ from factory.alchemy import SQLAlchemyModelFactory
 from .alchemyapp import models
 
 
+def setUpModule():
+    if models.USING_POSTGRES:
+        engine_name = (f'postgresql+psycopg2://{models.pg_user}:{models.pg_password}'
+                       f'@{models.pg_host}:{models.pg_port}/postgres')
+        template_engine = models.create_engine(engine_name, echo=False)
+
+        conn = template_engine.connect()
+        conn.execute("ROLLBACK")
+        try:
+            conn.execute(f"DROP DATABASE {models.pg_database}")
+        except sqlalchemy.exc.ProgrammingError:
+            # Could not drop the database, probably does not exist
+            conn.execute("ROLLBACK")
+        except sqlalchemy.exc.OperationalError:
+            # Could not drop database because it's being accessed by other users (psql prompt open?)
+            conn.execute("ROLLBACK")
+
+        conn.execute("ROLLBACK")
+        conn.execute(f"CREATE DATABASE {models.pg_database}")
+        conn.close()
+
+        template_engine.dispose()
+
+    models.Base.metadata.create_all(models.engine)
+
+
 class StandardFactory(SQLAlchemyModelFactory):
     class Meta:
         model = models.StandardModel
@@ -113,6 +139,10 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
     def setUp(self):
         models.session.rollback()
 
+    def tearDown(self):
+        models.session.rollback()
+        models.session.close()
+
     def test_simple_call(self):
         obj1 = WithGetOrCreateFieldFactory(foo='foo1')
         obj2 = WithGetOrCreateFieldFactory(foo='foo1')
@@ -135,18 +165,22 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
         self.assertEqual(6, len(objs))
         self.assertEqual(2, len(set(objs)))
         self.assertEqual(
-            list(
+            set(
                 obj.slug for obj in models.session.query(
                     models.MultiFieldModel.slug
                 )
             ),
-            ["alt", "main"],
+            set(["alt", "main"]),
         )
 
 
 class MultipleGetOrCreateFieldsTest(unittest.TestCase):
     def setUp(self):
         models.session.rollback()
+
+    def tearDown(self):
+        models.session.rollback()
+        models.session.close()
 
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
