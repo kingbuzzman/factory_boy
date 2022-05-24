@@ -28,7 +28,6 @@ except ImportError:
 
 faker = FakerFactory.create()
 
-
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
@@ -394,7 +393,6 @@ class DjangoNonIntegerPkTestCase(django_test.TestCase):
 
 
 class DjangoAbstractBaseSequenceTestCase(DjangoResetTestCase):
-
     def test_auto_sequence_son(self):
         """The sequence of the concrete son of an abstract model should be autonomous."""
         obj = ConcreteSonFactory()
