@@ -161,12 +161,12 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
         self.assertEqual(6, len(objs))
         self.assertEqual(2, len(set(objs)))
         self.assertEqual(
-            set(
+            list(
                 obj.slug for obj in models.session.query(
                     models.MultiFieldModel.slug
-                )
+                ).order_by(models.MultiFieldModel.slug)
             ),
-            set(["alt", "main"]),
+            ["alt", "main"],
         )
 
 
