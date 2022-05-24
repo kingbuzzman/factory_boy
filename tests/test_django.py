@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth.hashers import check_password
 from django.db.models import signals
 from django.test import utils as django_test_utils
+from faker import Factory as FakerFactory
 
 import factory.django
 
@@ -22,6 +23,9 @@ try:
     from PIL import Image
 except ImportError:
     Image = None
+
+faker = FakerFactory.create()
+
 
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
