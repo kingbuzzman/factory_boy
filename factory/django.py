@@ -21,7 +21,6 @@ from . import base, builder, declarations, enums, errors
 
 logger = logging.getLogger('factory.generate')
 
-
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
 DJANGO_22 = Version(django_version) < Version('3.0')
@@ -205,7 +204,10 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def _refresh_database_pks(cls, model_cls, objs):
+        # Avoid causing a django.core.exceptions.AppRegistryNotReady throughout all the tests.
+        # TODO: remove the `from . import django` from the `__init__.py`
         from django.contrib.contenttypes.fields import GenericForeignKey
+
         def get_field_value(instance, field):
             if isinstance(field, GenericForeignKey) and field.is_cached(instance):
                 return field.get_cached_value(instance)
