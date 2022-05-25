@@ -25,7 +25,6 @@ logger = logging.getLogger('factory.generate')
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
 DJANGO_22 = Version(django_version) < Version('3.0')
-DJANGO_32 = Version('3.0') < Version(django_version) < Version('4.0')
 
 _LAZY_LOADS = {}
 
@@ -206,29 +205,39 @@ class DjangoModelFactory(base.Factory):
 
     @classmethod
     def _refresh_database_pks(cls, model_cls, objs):
-        """
-        Before Django 3.0, there is an issue when bulk_insert.
-
-        The issue is that if you create an instance of a model,
-        and reference it in another unsaved instance of a model.
-        When you create the instance of the first one, the pk/id
-        is never updated on the sub model that referenced the first.
-        """
-        if not (DJANGO_22 or DJANGO_32):
-            return
-
         from django.contrib.contenttypes.fields import GenericForeignKey
-        fields = [f for f in model_cls._meta.get_fields()
-                    if isinstance(f, (models.fields.related.ForeignObject, GenericForeignKey))]
+        def get_field_value(instance, field):
+            if isinstance(field, GenericForeignKey) and field.is_cached(instance):
+                return field.get_cached_value(instance)
+            return getattr(instance, field.name)
+
+        """
+        Current Django version's GenericForeignKey is not made to work with bulk_insert.
+
+        The issue is that it caches the object referenced, once the object is
+        saved and receives a pk, the cache no longer matches. It doesn't
+        matter that it's the same obj reference. This is to bypass that pk
+        check and reset it.
+        """
+        field_to_reset = (GenericForeignKey,)
+        if DJANGO_22:
+            """
+            Before Django 3.0, there is an issue when bulk_insert.
+
+            The issue is that if you create an instance of a model,
+            and reference it in another unsaved instance of a model.
+            When you create the instance of the first one, the pk/id
+            is never updated on the sub model that referenced the first.
+            """
+            field_to_reset += (models.fields.related.ForeignObject,)
+
+        fields = [f for f in model_cls._meta.get_fields() if isinstance(f, field_to_reset)]
         if not fields:
             return
+
         for obj in objs:
             for field in fields:
-                if isinstance(field, GenericForeignKey):
-                    val = field.get_cached_value(obj)
-                else:
-                    val = getattr(obj, field.name)
-                setattr(obj, field.name, val)
+                setattr(obj, field.name, get_field_value(obj, field))
 
     @classmethod
     def _bulk_create(cls, size, **kwargs):
