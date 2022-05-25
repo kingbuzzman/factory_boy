@@ -25,6 +25,7 @@ logger = logging.getLogger('factory.generate')
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
 DJANGO_22 = Version(django_version) < Version('3.0')
+DJANGO_32 = Version('3.0') < Version(django_version) < Version('4.0')
 
 _LAZY_LOADS = {}
 
@@ -213,15 +214,21 @@ class DjangoModelFactory(base.Factory):
         When you create the instance of the first one, the pk/id
         is never updated on the sub model that referenced the first.
         """
-        if not DJANGO_22:
+        if not (DJANGO_22 or DJANGO_32):
             return
+
+        from django.contrib.contenttypes.fields import GenericForeignKey
         fields = [f for f in model_cls._meta.get_fields()
-                  if isinstance(f, models.fields.related.ForeignObject)]
+                    if isinstance(f, (models.fields.related.ForeignObject, GenericForeignKey))]
         if not fields:
             return
         for obj in objs:
             for field in fields:
-                setattr(obj, field.name, getattr(obj, field.name))
+                if isinstance(field, GenericForeignKey):
+                    val = field.get_cached_value(obj)
+                else:
+                    val = getattr(obj, field.name)
+                setattr(obj, field.name, val)
 
     @classmethod
     def _bulk_create(cls, size, **kwargs):

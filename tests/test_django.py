@@ -257,6 +257,28 @@ class AAFactory(factory.django.DjangoModelFactory):
     p = factory.SubFactory(PFactory)
 
 
+def lazy_content_type(o):
+    from django.contrib.contenttypes.models import ContentType
+    return ContentType.objects.get_for_model(o.generic_obj)
+
+
+class GenericModelFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        # exclude = ['generic_obj']
+        abstract = True
+
+    object_id = factory.SelfAttribute('generic_obj.id')
+    content_type = factory.LazyAttribute(lazy_content_type)
+
+
+class GenericPFactory(GenericModelFactory):
+    generic_obj = factory.SubFactory(PFactory)
+
+    class Meta:
+        use_bulk_create = True
+        model = models.GenericModel
+
+
 class DependencyInsertOrderTest(django_test.TestCase):
 
     def test_empty(self):
@@ -335,6 +357,10 @@ class DjangoBulkInsertTest(django_test.TestCase):
     def test_multi_level_nested_m2m_create_batch(self):
         with self.assertNumQueries(8):
             AAFactory.create_batch(10)
+
+    def test_single_generic(self):
+        with self.assertNumQueries(3):
+            GenericPFactory()
 
 
 class ModelTests(django_test.TestCase):
