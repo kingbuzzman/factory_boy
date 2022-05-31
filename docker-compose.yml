@@ -30,7 +30,7 @@ services:
       export POSTGRES_HOST=postgres &&
       cp -r factory_boy factory_boy_$$PYENV_NAME &&
       cd factory_boy_$$PYENV_NAME &&
-      POSTGRES_DATABASE=factory_boy_$$PYENV_NAME tox --workdir  -f $$PYENV_NAME
+      POSTGRES_DATABASE=factory_boy_$$PYENV_NAME tox -f $$PYENV_NAME
       '
 
   py38:
