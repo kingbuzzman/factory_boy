@@ -24,9 +24,9 @@ services:
       bash -c '
       apt update &&
       DEBIAN_FRONTEND=noninteractive apt install -y build-essential &&
+      pip install -U pip tox-factor flake8 isort check-manifest &&
       cp -r factory_boy factory_boy_$$PYENV_NAME &&
       cd factory_boy_$$PYENV_NAME &&
-      pip install -U pip tox-factor flake8 isort check-manifest &&
       MONGO_HOST=mongo POSTGRES_HOST=postgres POSTGRES_DATABASE=factory_boy_$$PYENV_NAME tox --workdir /tmp/.tox -f $$PYENV_NAME
       '
 
