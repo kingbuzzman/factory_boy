@@ -15,6 +15,7 @@ from django import __version__ as django_version
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
 from django.db import IntegrityError, connections, models
+from django.db.models.sql import InsertQuery
 from packaging.version import Version
 
 from . import base, builder, declarations, enums, errors
@@ -221,7 +222,7 @@ class DjangoModelFactory(base.Factory):
         matter that it's the same obj reference. This is to bypass that pk
         check and reset it.
         """
-        field_to_reset = (GenericForeignKey,)
+        field_to_reset = (GenericForeignKey, models.OneToOneField)
         if DJANGO_22:
             """
             Before Django 3.0, there is an issue when bulk_insert.
@@ -259,7 +260,23 @@ class DjangoModelFactory(base.Factory):
         for model_cls, objs in dependency_insert_order(instances_created):
             manager = cls._get_manager(model_cls)
             cls._refresh_database_pks(model_cls, objs)
-            manager.bulk_create(objs)
+
+            concrete_model = True
+            for parent in model_cls._meta.get_parent_list():
+                if parent._meta.concrete_model is not model_cls._meta.concrete_model:
+                    concrete_model = False
+
+            if concrete_model:
+                manager.bulk_create(objs)
+            else:
+                concrete_fields = model_cls._meta.local_fields
+                connection = connections[cls._meta.database]
+
+                # Avoids writing the INSERT INTO sql script manually
+                query = InsertQuery(model_cls)
+                query.insert_values(concrete_fields, objs)
+                query.get_compiler(connection=connection).execute_sql()
+
         # return models_to_create
         return models_to_return
 

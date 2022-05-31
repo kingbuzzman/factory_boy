@@ -201,6 +201,8 @@ class RChildFactory(factory.django.DjangoModelFactory):
         use_bulk_create = True
 
     text = 'test'
+    r_ptr = factory.SubFactory(RFactory)
+
 
 class SFactory(factory.django.DjangoModelFactory):
     class Meta:
@@ -364,8 +366,11 @@ class DjangoBulkInsertTest(django_test.TestCase):
             GenericPFactory()
 
     def test_multi_table_inherited_model(self):
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):
             RChildFactory()
+
+        with self.assertNumQueries(3):
+            RChildFactory.create_batch(10)
 
 
 class ModelTests(django_test.TestCase):
