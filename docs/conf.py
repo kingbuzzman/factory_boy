@@ -9,13 +9,13 @@
 import os
 import sys
 
-import factory
-
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.dirname(os.path.abspath('.')))
 
+# Must be imported after the parent directory was added to sys.path for global sphinx installation.
+import factory  # noqa
 
 # -- Project information -----------------------------------------------------
 
@@ -41,8 +41,8 @@ extensions = [
 ]
 
 extlinks = {
-    'issue': ('https://github.com/FactoryBoy/factory_boy/issues/%s', 'issue #%s'),
-    'pr': ('https://github.com/FactoryBoy/factory_boy/pull/%s', 'pull request #%s'),
+    'issue': ('https://github.com/FactoryBoy/factory_boy/issues/%s', 'issue %s'),
+    'pr': ('https://github.com/FactoryBoy/factory_boy/pull/%s', 'pull request %s'),
 }
 
 # Add any paths that contain templates here, relative to this directory.
