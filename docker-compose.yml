@@ -25,9 +25,12 @@ services:
       apt update &&
       DEBIAN_FRONTEND=noninteractive apt install -y build-essential &&
       pip install -U pip tox-factor flake8 isort check-manifest &&
+      export TOX_WORK_DIR=/tmp/.tox &&
+      export MONGO_HOST=mongo &&
+      export POSTGRES_HOST=postgres &&
       cp -r factory_boy factory_boy_$$PYENV_NAME &&
       cd factory_boy_$$PYENV_NAME &&
-      MONGO_HOST=mongo POSTGRES_HOST=postgres POSTGRES_DATABASE=factory_boy_$$PYENV_NAME tox --workdir /tmp/.tox -f $$PYENV_NAME
+      POSTGRES_DATABASE=factory_boy_$$PYENV_NAME tox --workdir  -f $$PYENV_NAME
       '
 
   py38:
