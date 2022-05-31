@@ -163,7 +163,7 @@ class U(models.Model):
 
 
 class RChild(R):
-    pass
+    test = models.CharField(max_length=10)
 
 
 class A(models.Model):
@@ -229,13 +229,6 @@ class B2(models.Model):
     delete_top = models.ForeignKey(DeleteTop, models.CASCADE)
 
 
-class B3(models.Model):
-    restrict = models.ForeignKey(R, models.CASCADE)
-
-
-class DeleteBottom(models.Model):
-    b1 = models.ForeignKey(B1, models.CASCADE)
-    b2 = models.ForeignKey(B2, models.CASCADE)
 
 
 class GenericModel(models.Model):

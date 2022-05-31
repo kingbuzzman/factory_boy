@@ -200,6 +200,7 @@ class RChildFactory(factory.django.DjangoModelFactory):
         model = models.RChild
         use_bulk_create = True
 
+    text = 'test'
 
 class SFactory(factory.django.DjangoModelFactory):
     class Meta:
@@ -361,6 +362,10 @@ class DjangoBulkInsertTest(django_test.TestCase):
     def test_single_generic(self):
         with self.assertNumQueries(3):
             GenericPFactory()
+
+    def test_abstract(self):
+        with self.assertNumQueries(2):
+            RChildFactory()
 
 
 class ModelTests(django_test.TestCase):
