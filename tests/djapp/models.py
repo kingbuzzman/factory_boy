@@ -163,7 +163,7 @@ class U(models.Model):
 
 
 class RChild(R):
-    test = models.CharField(max_length=10)
+    text = models.CharField(max_length=10)
 
 
 class A(models.Model):

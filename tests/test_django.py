@@ -363,7 +363,7 @@ class DjangoBulkInsertTest(django_test.TestCase):
         with self.assertNumQueries(3):
             GenericPFactory()
 
-    def test_abstract(self):
+    def test_multi_table_inherited_model(self):
         with self.assertNumQueries(2):
             RChildFactory()
 
