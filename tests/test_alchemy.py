@@ -98,11 +98,19 @@ class WithMultipleGetOrCreateFieldsFactory(SQLAlchemyModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
-class SQLAlchemyPkSequenceTestCase(unittest.TestCase):
+class TransactionTestCase(unittest.TestCase):
+    def setUp(self):
+        models.Base.metadata.create_all(models.engine)
+
+    def tearDown(self):
+        models.session.rollback()
+        models.Base.metadata.drop_all(models.engine)
+
+
+class SQLAlchemyPkSequenceTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
         StandardFactory.reset_sequence(1)
-        NonIntegerPkFactory._meta.sqlalchemy_session.rollback()
 
     def test_pk_first(self):
         std = StandardFactory.build()
@@ -135,10 +143,7 @@ class SQLAlchemyPkSequenceTestCase(unittest.TestCase):
         self.assertEqual(0, std2.id)
 
 
-class SQLAlchemyGetOrCreateTests(unittest.TestCase):
-    def setUp(self):
-        models.session.rollback()
-
+class SQLAlchemyGetOrCreateTests(TransactionTestCase):
     def test_simple_call(self):
         obj1 = WithGetOrCreateFieldFactory(foo='foo1')
         obj2 = WithGetOrCreateFieldFactory(foo='foo1')
@@ -170,10 +175,7 @@ class SQLAlchemyGetOrCreateTests(unittest.TestCase):
         )
 
 
-class MultipleGetOrCreateFieldsTest(unittest.TestCase):
-    def setUp(self):
-        models.session.rollback()
-
+class MultipleGetOrCreateFieldsTest(TransactionTestCase):
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
@@ -242,11 +244,10 @@ class SQLAlchemySessionPersistenceTestCase(unittest.TestCase):
                     model = models.StandardModel
 
 
-class SQLAlchemyNonIntegerPkTestCase(unittest.TestCase):
-    def setUp(self):
-        super().setUp()
+class SQLAlchemyNonIntegerPkTestCase(TransactionTestCase):
+    def tearDown(self):
+        super().tearDown()
         NonIntegerPkFactory.reset_sequence()
-        NonIntegerPkFactory._meta.sqlalchemy_session.rollback()
 
     def test_first(self):
         nonint = NonIntegerPkFactory.build()
@@ -276,7 +277,7 @@ class SQLAlchemyNonIntegerPkTestCase(unittest.TestCase):
         self.assertEqual('foo0', nonint2.id)
 
 
-class SQLAlchemyNoSessionTestCase(unittest.TestCase):
+class SQLAlchemyNoSessionTestCase(TransactionTestCase):
 
     def test_create_raises_exception_when_no_session_was_set(self):
         with self.assertRaises(RuntimeError):
@@ -290,8 +291,7 @@ class SQLAlchemyNoSessionTestCase(unittest.TestCase):
         self.assertEqual(inst1.id, 1)
 
 
-class SQLAlchemySessionFactoryTestCase(unittest.TestCase):
-
+class SQLAlchemySessionFactoryTestCase(TransactionTestCase):
     def test_create_get_session_from_sqlalchemy_session_factory(self):
         class SessionGetterFactory(SQLAlchemyModelFactory):
             class Meta:
@@ -318,7 +318,7 @@ class SQLAlchemySessionFactoryTestCase(unittest.TestCase):
                 id = factory.Sequence(lambda n: n)
 
 
-class NameConflictTests(unittest.TestCase):
+class NameConflictTests(TransactionTestCase):
     """Regression test for `TypeError: _save() got multiple values for argument 'session'`
 
     See #775.
