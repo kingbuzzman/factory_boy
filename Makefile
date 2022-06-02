@@ -64,6 +64,7 @@ test:
 		-Wdefault:"parameter codeset is deprecated":DeprecationWarning:: \
 		-Wdefault:"distutils Version classes are deprecated. Use packaging.version instead":DeprecationWarning:: \
 		-m unittest
+# TODO: Remove "distutils Version classes are deprecated" when django 2.2 is dropped
 
 # DOC: Test the examples
 example-test:

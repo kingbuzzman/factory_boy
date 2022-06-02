@@ -15,21 +15,27 @@ try:
 except ImportError:
     pass
 
+postgres_user = os.getenv('POSTGRES_USER', 'postgres')
+postgres_name = os.environ.get('POSTGRES_DATABASE', 'factory_boy_test')
+postgres_password = os.getenv('POSTGRES_PASSWORD', 'password')
+postgres_host = os.getenv('POSTGRES_HOST', 'localhost')
+postgres_port = os.getenv('POSTGRES_PORT', '5432')
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.environ.get('POSTGRES_DATABASE', 'factory_boy_test'),
-        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'password'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': postgres_name,
+        'USER': postgres_user,
+        'PASSWORD': postgres_password,
+        'HOST': postgres_host,
+        'PORT': postgres_port,
     },
     'replica': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.environ.get('POSTGRES_DATABASE', 'factory_boy_test') + '_rp',
-        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'password'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'NAME': postgres_name + '_rp',
+        'USER': postgres_user,
+        'PASSWORD': postgres_password,
+        'HOST': postgres_host,
+        'PORT': postgres_port,
     }
 }
