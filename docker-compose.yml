@@ -1,0 +1,93 @@
+version: "3.8"
+
+volumes:
+  pip_cache:
+
+services:
+
+  mongo:
+    image: mongo
+    command: mongod --quiet --logpath /dev/null
+
+  postgres:
+    image: postgres:alpine
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=alch_factory_boy_test
+
+  py37: &pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: python:3.7
+
+    volumes:
+      - .:/factory_boy
+    depends_on:
+      - mongo
+      - postgres
+    environment:
+      - PYENV_NAME=py37
+    command: >
+      bash -c '
+      export MONGO_HOST=mongo &&
+      export POSTGRES_HOST=postgres &&
+      cp -r factory_boy factory_boy_$$PYENV_NAME &&
+      cd factory_boy_$$PYENV_NAME &&
+      TOX_WORK_DIR=/tmp/.tox tox -f $$PYENV_NAME
+      '
+
+  py38:
+    <<: *pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: python:3.8
+    environment:
+      - PYENV_NAME=py38
+
+  py39:
+    <<: *pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: python:3.9
+    environment:
+      - PYENV_NAME=py39
+
+  py310:
+    <<: *pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: python:3.10
+    environment:
+      - PYENV_NAME=py310
+
+  check:
+    <<: *pyenv
+    command: bash -c 'cd factory_boy; TOX_WORK_DIR=/tmp/.tox tox -e lint -e docs' # -e examples -e linkcheck'
+
+  pypy37:
+    <<: *pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: pypy:3.7
+    environment:
+      - PYENV_NAME=pypy37
+
+  pypy38:
+    <<: *pyenv
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+      args:
+        PYTHON_VERSION: pypy:3.8
+    environment:
+      - PYENV_NAME=pypy38
