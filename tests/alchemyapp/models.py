@@ -8,16 +8,6 @@ from sqlalchemy import Column, Integer, Unicode, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-engine_name = 'sqlite://'
-
-USING_POSTGRES = False
-pg_database = 'alch_' + os.environ.get('POSTGRES_DATABASE', 'factory_boy_test')
-pg_user = os.environ.get('POSTGRES_USER', 'postgres')
-pg_password = os.environ.get('POSTGRES_PASSWORD', 'password')
-pg_host = os.environ.get('POSTGRES_HOST', 'localhost')
-pg_port = os.environ.get('POSTGRES_PORT', '5432')
-engine_name_pg = f'postgresql+psycopg2://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}'
-
 try:
     import psycopg2  # noqa: F401
     USING_POSTGRES = True
@@ -30,10 +20,20 @@ except ImportError:
         compat.register()
         USING_POSTGRES = True
     except ImportError:
-        pass
+        USING_POSTGRES = False
 
-engine = create_engine(engine_name_pg if USING_POSTGRES else engine_name)
+if USING_POSTGRES:
+    pg_database = 'alch_' + os.environ.get('POSTGRES_DATABASE', 'factory_boy_test')
+    pg_user = os.environ.get('POSTGRES_USER', 'postgres')
+    pg_password = os.environ.get('POSTGRES_PASSWORD', 'password')
+    pg_host = os.environ.get('POSTGRES_HOST', 'localhost')
+    pg_port = os.environ.get('POSTGRES_PORT', '5432')
+    engine_name = f'postgresql+psycopg2://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}'
+else:
+    engine_name = 'sqlite://'
+
 session = scoped_session(sessionmaker())
+engine = create_engine(engine_name)
 session.configure(bind=engine)
 Base = declarative_base()
 

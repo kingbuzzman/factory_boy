@@ -10,7 +10,11 @@ import unittest
 from contextlib import ExitStack
 from unittest import mock
 
-import django
+try:
+    import django
+except ImportError:
+    raise unittest.SkipTest("django tests disabled.")
+
 from django import test as django_test
 from django.apps import apps
 from django.conf import settings

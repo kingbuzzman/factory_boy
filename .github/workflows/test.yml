@@ -4,36 +4,28 @@ on:
   - push
   - pull_request
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Python ${{ matrix.python-version }}, Django ${{ matrix.django-version }}, Database ${{ matrix.database-type }}
+  tests:
+    name: Python ${{ matrix.python-version }}, Database ${{ matrix.database-type }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
         python-version:
-        - '3.7'
-        - '3.8'
-        - '3.9'
-        - '3.10'
-        - "pypy-3.7"
-        - "pypy-3.8"
-        django-version:
-        - '2.2'
-        - '3.2'
-        - '4.0'
-        - 'main'
+          - "3.7"
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "pypy-3.7"
+          - "pypy-3.8"
         database-type:
-        - 'sqlite'
-        - 'postgres'
-        exclude:
-        - { django-version: '2.2', python-version: '3.9' }
-        - { django-version: '2.2', python-version: '3.10' }
-        - { django-version: '4.0', python-version: 'pypy-3.7' }
-        - { django-version: '4.0', python-version: '3.7' }
-        - { django-version: 'main', python-version: 'pypy-3.7' }
-        - { django-version: 'main', python-version: '3.7' }
+          - "sqlite"
+          - "postgres"
 
     services:
       mongodb:
@@ -47,6 +39,10 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_PASSWORD: password
+          POSTGRES_DB: alch_factory_boy_test
+
+    env:
+      TOXENV: ${{ matrix.tox-environment }}
 
     steps:
       - uses: actions/checkout@v2
@@ -62,5 +58,4 @@ jobs:
       - name: Run tests
         run: tox
         env:
-          DJANGO: ${{ matrix.django-version }}
           DATABASE_TYPE: ${{ matrix.database-type }}
