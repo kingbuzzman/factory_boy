@@ -39,8 +39,6 @@ def setUpModule():
 
         template_engine.dispose()
 
-    models.Base.metadata.create_all(models.engine)
-
 
 class StandardFactory(SQLAlchemyModelFactory):
     class Meta:

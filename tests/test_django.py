@@ -113,7 +113,7 @@ class MultifieldModelFactory(factory.django.DjangoModelFactory):
         model = models.MultifieldModel
         django_get_or_create = ['slug']
 
-    text = factory.LazyAttribute(lambda n: faker.text()[:20])
+    text = factory.Faker('text')
 
 
 class AbstractBaseFactory(factory.django.DjangoModelFactory):
@@ -205,6 +205,8 @@ class RChildFactory(factory.django.DjangoModelFactory):
         use_bulk_create = True
 
     text = 'test'
+    r_ptr = factory.SubFactory(RFactory)
+
 
 class SFactory(factory.django.DjangoModelFactory):
     class Meta:
@@ -368,8 +370,11 @@ class DjangoBulkInsertTest(django_test.TestCase):
             GenericPFactory()
 
     def test_multi_table_inherited_model(self):
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):
             RChildFactory()
+
+        with self.assertNumQueries(3):
+            RChildFactory.create_batch(10)
 
 
 class ModelTests(django_test.TestCase):
@@ -442,7 +447,7 @@ class DjangoPkSequenceTestCase(DjangoResetTestCase):
         self.assertEqual(11, std2.pk)
 
 
-class DjangoGetOrCreateTestCase(django_test.TestCase):
+class DjangoGetOrCreateTests(django_test.TestCase):
     def test_simple_call(self):
         obj1 = MultifieldModelFactory(slug='slug1')
         obj2 = MultifieldModelFactory(slug='slug1')
@@ -479,7 +484,7 @@ class DjangoGetOrCreateTestCase(django_test.TestCase):
         )
 
 
-class MultipleGetOrCreateFieldsTestCase(django_test.TestCase):
+class MultipleGetOrCreateFieldsTest(django_test.TestCase):
     def test_one_defined(self):
         obj1 = WithMultipleGetOrCreateFieldsFactory()
         obj2 = WithMultipleGetOrCreateFieldsFactory(slug=obj1.slug)
@@ -1305,16 +1310,15 @@ class DjangoCustomManagerTestCase(django_test.TestCase):
         ObjFactory.create(arg='invalid')
 
 
-class DjangoModelFactoryDuplicateSaveDeprecationTestCase(django_test.TestCase):
+class DjangoModelFactoryDuplicateSaveDeprecationTest(django_test.TestCase):
     class StandardFactoryWithPost(StandardFactory):
         @factory.post_generation
         def post_action(obj, create, extracted, **kwargs):
-            obj.non_existant_field = 3
+            return 3
 
     def test_create_warning(self):
         with self.assertWarns(DeprecationWarning) as cm:
-            instance = self.StandardFactoryWithPost.create()
-            assert instance.non_existant_field == 3
+            self.StandardFactoryWithPost.create()
 
         [msg] = cm.warning.args
         self.assertEqual(
