@@ -4,5 +4,5 @@ ARG PYTHON_VERSION
 
 FROM ${PYTHON_VERSION}
 RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive apt install -y build-essential ocrfeeder
+    DEBIAN_FRONTEND=noninteractive apt install -y build-essential
 RUN --mount=type=cache,target=/root/.cache/pip pip install -U pip tox-factor flake8 isort check-manifest

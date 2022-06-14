@@ -68,10 +68,6 @@ services:
     environment:
       - PYENV_NAME=py310
 
-  check:
-    <<: *pyenv
-    command: bash -c 'cd factory_boy; TOX_WORK_DIR=/tmp/.tox tox -e lint -e docs' # -e examples -e linkcheck'
-
   pypy37:
     <<: *pyenv
     build:
