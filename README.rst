@@ -415,7 +415,7 @@ To test with a specific framework version, you may use a ``tox`` target:
     $ tox -e py310-mongo
 
 
-To test locally using `docker <https://www.docker.com/get-started/>`_; and not have to mess around with different python versions:
+To test locally using `docker <https://www.docker.com/get-started/>`_ and not have to mess around with different python versions:
 
 .. code-block:: sh
 
@@ -425,9 +425,13 @@ To test locally using `docker <https://www.docker.com/get-started/>`_; and not h
     # run all tests for python 3.10
     $ docker-compose run --rm py310
 
+    # run a specific test for python 3.10
+    $ docker-compose run --rm py310 tox -e py310-django32-postgres
+
     # explore the machine / run things manually
     $ docker-compose run --rm py310 bash
     $ tox -e py310-django32-postgres
+    $ tox -e py310-alchemy-postgres
 
     # remember to remove all containers
     $ docker-compose down
