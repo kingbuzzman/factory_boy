@@ -3,6 +3,13 @@
 ARG PYTHON_VERSION
 
 FROM ${PYTHON_VERSION}
+
+ENV TOX_WORK_DIR=/tmp/.tox
+ENV MONGO_HOST=mongo
+ENV POSTGRES_HOST=postgres
+
 RUN apt update && \
     DEBIAN_FRONTEND=noninteractive apt install -y build-essential
 RUN --mount=type=cache,target=/root/.cache/pip pip install -U pip tox-factor flake8 isort check-manifest
+
+WORKDIR /factory_boy
