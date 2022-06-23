@@ -276,7 +276,6 @@ class DjangoModelFactory(base.Factory):
                 query.insert_values(concrete_fields, objs)
                 query.get_compiler(connection=connection).execute_sql()
 
-        # return models_to_create
         return models_to_return
 
     @classmethod
