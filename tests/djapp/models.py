@@ -146,10 +146,6 @@ class R(models.Model):
     p = models.ForeignKey(P, models.CASCADE, null=True)
 
 
-def get_default_r():
-    return R.objects.get_or_create(is_default=True)[0].pk
-
-
 class S(models.Model):
     r = models.ForeignKey(R, models.CASCADE)
 
@@ -176,57 +172,6 @@ class AA(models.Model):
     a = models.OneToOneField(A, models.CASCADE)
     u = models.OneToOneField(U, models.CASCADE)
     p = models.OneToOneField(P, models.CASCADE)
-
-
-class B(models.Model):
-    protect = models.ForeignKey(R, models.PROTECT)
-
-
-class M(models.Model):
-    m2m = models.ManyToManyField(R, related_name="m_set")
-    m2m_through = models.ManyToManyField(R, through="MR", related_name="m_through_set")
-    m2m_through_null = models.ManyToManyField(
-        R, through="MRNull", related_name="m_through_null_set"
-    )
-
-
-class MR(models.Model):
-    m = models.ForeignKey(M, models.CASCADE)
-    r = models.ForeignKey(R, models.CASCADE)
-
-
-class MRNull(models.Model):
-    m = models.ForeignKey(M, models.CASCADE)
-    r = models.ForeignKey(R, models.SET_NULL, null=True)
-
-
-class HiddenUser(models.Model):
-    r = models.ForeignKey(R, models.CASCADE, related_name="+")
-
-
-class HiddenUserProfile(models.Model):
-    user = models.ForeignKey(HiddenUser, models.CASCADE)
-
-
-class M2MTo(models.Model):
-    pass
-
-
-class M2MFrom(models.Model):
-    m2m = models.ManyToManyField(M2MTo)
-
-
-class DeleteTop(models.Model):
-    b1 = GenericRelation("GenericB1")
-    b2 = GenericRelation("GenericB2")
-
-
-class B1(models.Model):
-    delete_top = models.ForeignKey(DeleteTop, models.CASCADE)
-
-
-class B2(models.Model):
-    delete_top = models.ForeignKey(DeleteTop, models.CASCADE)
 
 
 class GenericModel(models.Model):
