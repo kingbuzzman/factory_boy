@@ -23,6 +23,7 @@ jobs:
           - "3.10"
           - "pypy-3.7"
           - "pypy-3.8"
+          - "pypy-3.9"
         database-type:
           - "sqlite"
           - "postgres"
@@ -39,10 +40,6 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_PASSWORD: password
-          POSTGRES_DB: alch_factory_boy_test
-
-    env:
-      TOXENV: ${{ matrix.tox-environment }}
 
     steps:
       - uses: actions/checkout@v2

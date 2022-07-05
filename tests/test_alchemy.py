@@ -10,6 +10,8 @@ try:
 except ImportError:
     raise unittest.SkipTest("sqlalchemy tests disabled.")
 
+from sqlalchemy_utils import create_database, database_exists, drop_database
+
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
 
@@ -75,12 +77,23 @@ class WithMultipleGetOrCreateFieldsFactory(SQLAlchemyModelFactory):
     text = factory.Sequence(lambda n: "text%s" % n)
 
 
+if models.USING_POSTGRES:
+    # sqlite test database gets created/destroyed automatically, postgres does not.
+
+    def setUpModule():
+        if not database_exists(models.engine.url):
+            create_database(models.engine.url)
+
+    def tearDownModule():
+        drop_database(models.engine.url)
+
+
 class TransactionTestCase(unittest.TestCase):
     def setUp(self):
         models.Base.metadata.create_all(models.engine)
 
     def tearDown(self):
-        models.session.rollback()
+        models.session.remove()
         models.Base.metadata.drop_all(models.engine)
 
 
