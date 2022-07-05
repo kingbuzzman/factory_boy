@@ -183,12 +183,14 @@ class PFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.P
         use_bulk_create = True
+        skip_postgeneration_save = True
 
 
 class RFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.R
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     is_default = True
     p = factory.SubFactory(PFactory)
@@ -198,6 +200,7 @@ class RChildFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.RChild
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     text = 'test'
     r_ptr = factory.SubFactory(RFactory)
@@ -207,6 +210,7 @@ class SFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.S
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     r = factory.SubFactory(RFactory)
 
@@ -215,6 +219,7 @@ class TFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.T
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     s = factory.SubFactory(SFactory)
 
@@ -223,6 +228,7 @@ class UFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.U
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     t = factory.SubFactory(TFactory)
 
@@ -231,6 +237,7 @@ class APFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.A.p_m.through
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     a = factory.SubFactory('tests.test_django.AFactory')
     p = factory.SubFactory(PFactory)
@@ -240,6 +247,7 @@ class AFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.A
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     p_o = factory.SubFactory(PFactory)
     p_f = factory.SubFactory(PFactory)
@@ -253,6 +261,7 @@ class AAFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = models.AA
         use_bulk_create = True
+        skip_postgeneration_save = True
 
     a = factory.SubFactory(AWithMFactory)
     u = factory.SubFactory(UFactory)
@@ -268,6 +277,7 @@ class GenericModelFactory(factory.django.DjangoModelFactory):
     class Meta:
         # exclude = ['generic_obj']
         abstract = True
+        skip_postgeneration_save = True
 
     object_id = factory.SelfAttribute('generic_obj.id')
     content_type = factory.LazyAttribute(lazy_content_type)
@@ -279,6 +289,7 @@ class GenericPFactory(GenericModelFactory):
     class Meta:
         use_bulk_create = True
         model = models.GenericModel
+        skip_postgeneration_save = True
 
 
 class DependencyInsertOrderTest(django_test.TestCase):
@@ -321,54 +332,68 @@ class DependencyInsertOrderTest(django_test.TestCase):
                                   (models.A.p_m.through, [p_m1, p_m2])])
 
 
-@unittest.skipIf(SKIP_BULK_INSERT, "bulk insert not supported by current db.")
 class DjangoBulkInsertTest(django_test.TestCase):
+    SUPPORTS_BULK_INSERT = factory.django.connection_supports_bulk_insert(
+        factory.django.DEFAULT_DB_ALIAS
+    )
 
     def test_single_object_create(self):
-        with self.assertNumQueries(1):
+        EXPECTED_QUERIES = 1 if self.SUPPORTS_BULK_INSERT else 1
+        with self.assertNumQueries(EXPECTED_QUERIES):
             PFactory()
 
     def test_single_object_create_batch(self):
-        with self.assertNumQueries(1):
+        EXPECTED_QUERIES = 1 if self.SUPPORTS_BULK_INSERT else 10
+        with self.assertNumQueries(EXPECTED_QUERIES):
             PFactory.create_batch(10)
 
     def test_one_level_nested_single_object_create(self):
-        with self.assertNumQueries(2):
+        EXPECTED_QUERIES = 2 if self.SUPPORTS_BULK_INSERT else 2
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RFactory()
 
         existing_p = PFactory()
-        with self.assertNumQueries(1):
+        EXPECTED_QUERIES = 1 if self.SUPPORTS_BULK_INSERT else 1
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RFactory(p=existing_p)
 
     def test_one_level_nested_single_object_create_batch(self):
-        with self.assertNumQueries(2):
+        EXPECTED_QUERIES = 2 if self.SUPPORTS_BULK_INSERT else 20
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RFactory.create_batch(10)
 
         existing_p = PFactory()
-        with self.assertNumQueries(1):
+        EXPECTED_QUERIES = 1 if self.SUPPORTS_BULK_INSERT else 10
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RFactory.create_batch(10, p=existing_p)
 
     def test_one_level_nested_m2m_create_batch(self):
-        with self.assertNumQueries(3):
+        EXPECTED_QUERIES = 3 if self.SUPPORTS_BULK_INSERT else 70
+        with self.assertNumQueries(EXPECTED_QUERIES):
             AWithMFactory.create_batch(10)
 
         existing_p = PFactory()
-        with self.assertNumQueries(3):
+        EXPECTED_QUERIES = 3 if self.SUPPORTS_BULK_INSERT else 60
+        with self.assertNumQueries(EXPECTED_QUERIES):
             AWithMFactory.create_batch(10, p_f=existing_p)
 
     def test_multi_level_nested_m2m_create_batch(self):
-        with self.assertNumQueries(8):
+        EXPECTED_QUERIES = 8 if self.SUPPORTS_BULK_INSERT else 140
+        with self.assertNumQueries(EXPECTED_QUERIES):
             AAFactory.create_batch(10)
 
     def test_single_generic(self):
-        with self.assertNumQueries(3):
+        EXPECTED_QUERIES = 3 if self.SUPPORTS_BULK_INSERT else 3
+        with self.assertNumQueries(EXPECTED_QUERIES):
             GenericPFactory()
 
     def test_multi_table_inherited_model(self):
-        with self.assertNumQueries(3):
+        EXPECTED_QUERIES = 3 if self.SUPPORTS_BULK_INSERT else 4
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RChildFactory()
 
-        with self.assertNumQueries(3):
+        EXPECTED_QUERIES = 3 if self.SUPPORTS_BULK_INSERT else 40
+        with self.assertNumQueries(EXPECTED_QUERIES):
             RChildFactory.create_batch(10)
 
 
