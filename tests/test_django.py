@@ -24,7 +24,6 @@ from django.core.management.commands.migrate import Command as MigrateCommand
 from django.db import connections
 from django.db.models import signals
 from django.test import utils as django_test_utils
-from faker import Factory as FakerFactory
 
 import factory
 import factory.django
@@ -36,13 +35,9 @@ try:
 except ImportError:
     Image = None
 
-faker = FakerFactory.create()
-
 # Setup Django before importing Django models.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.djapp.settings')
 django.setup()
-
-SKIP_BULK_INSERT = not factory.django.connection_supports_bulk_insert(factory.django.DEFAULT_DB_ALIAS)
 
 from .djapp import models  # noqa:E402 isort:skip
 
