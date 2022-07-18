@@ -388,7 +388,7 @@ class ImageField(FileField):
 def dependency_insert_order(data):
     """This is almost the same function from django/core/serializers/__init__.py:sort_dependencies with a slight
     modification on `if hasattr(rel_model, 'natural_key') and rel_model != model:` that was removed, so we have the
-    REAL dependency order. The original implementation was setup to only write to files in order if they had a know
+    REAL dependency order. The original implementation was setup to only write to fields in order if they had a known
     dependency, we always want it in order regardless of the natural_key.
     """
 
