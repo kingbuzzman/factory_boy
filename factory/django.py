@@ -224,7 +224,7 @@ class DjangoModelFactory(base.Factory):
         fields_to_reset = (GenericForeignKey, models.OneToOneField)
         if DJANGO_22:
             """
-            Before Django 3.0, there is an issue when bulk_insert.
+            Before Django 3.0, there is an issue when using bulk_insert.
 
             The issue is that if you create an instance of a model,
             and reference it in another unsaved instance of a model.
