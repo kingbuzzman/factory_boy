@@ -213,24 +213,20 @@ class DjangoModelFactory(base.Factory):
                 return field.get_cached_value(instance)
             return getattr(instance, field.name)
 
-        """
-        Current Django version's GenericForeignKey is not made to work with bulk_insert.
-
-        The issue is that it caches the object referenced, once the object is
-        saved and receives a pk, the cache no longer matches. It doesn't
-        matter that it's the same obj reference. This is to bypass that pk
-        check and reset it.
-        """
+        # Current Django version's GenericForeignKey is not made to work with bulk_insert.
+        #
+        # The issue is that it caches the object referenced, once the object is
+        # saved and receives a pk, the cache no longer matches. It doesn't
+        # matter that it's the same obj reference. This is to bypass that pk
+        # check and reset it.
         fields_to_reset = (GenericForeignKey, models.OneToOneField)
         if DJANGO_22:
-            """
-            Before Django 3.0, there is an issue when using bulk_insert.
-
-            The issue is that if you create an instance of a model,
-            and reference it in another unsaved instance of a model.
-            When you create the instance of the first one, the pk/id
-            is never updated on the sub model that referenced the first.
-            """
+            # Before Django 3.0, there is an issue when using bulk_insert.
+            #
+            # The issue is that if you create an instance of a model,
+            # and reference it in another unsaved instance of a model.
+            # When you create the instance of the first one, the pk/id
+            # is never updated on the sub model that referenced the first.
             fields_to_reset += (models.fields.related.ForeignObject,)
 
         fields = [f for f in model_cls._meta.get_fields() if isinstance(f, fields_to_reset)]
