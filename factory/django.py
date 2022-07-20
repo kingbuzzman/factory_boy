@@ -251,7 +251,7 @@ class DjangoModelFactory(base.Factory):
             step = builder.StepBuilder(cls._meta, kwargs, enums.BUILD_STRATEGY)
             models_to_return.append(step.build(collect_instances=instances))
 
-        for model_cls, objs in dependency_insert_order(instances, collect_instances=None):
+        for model_cls, objs in dependency_insert_order(instances):
             manager = cls._get_manager(model_cls)
             cls._refresh_database_pks(model_cls, objs)
 
