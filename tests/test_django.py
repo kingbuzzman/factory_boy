@@ -320,13 +320,14 @@ class DependencyInsertOrderTest(django_test.TestCase):
 
     def test_new_m2m(self):
         step = factory.builder.StepBuilder(AWithMFactory._meta, {}, factory.enums.BUILD_STRATEGY)
-        a1 = step.build()
+        created_instances = []
+        a1 = step.build(created_instances=created_instances)
         p1 = a1.p_o
         p2 = a1.p_f
-        p_m1, p_m2 = [x for x in step.created_instances if isinstance(x, models.A.p_m.through)]
+        p_m1, p_m2 = [x for x in created_instances if isinstance(x, models.A.p_m.through)]
         p3 = p_m1.p
         p4 = p_m2.p
-        actual = factory.django.dependency_insert_order(step.created_instances)
+        actual = factory.django.dependency_insert_order(created_instances)
         self.assertEqual(actual, [(models.P, [p1, p2, p3, p4]),
                                   (models.A, [a1]),
                                   (models.A.p_m.through, [p_m1, p_m2])])
