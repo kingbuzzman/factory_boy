@@ -246,13 +246,12 @@ class DjangoModelFactory(base.Factory):
                 "is either not set or False." % dict(f=cls.__name__))
 
         models_to_return = []
-        instances_created = []
+        instances = []
         for _ in range(size):
             step = builder.StepBuilder(cls._meta, kwargs, enums.BUILD_STRATEGY)
-            models_to_return.append(step.build())
-            instances_created.extend(step.created_instances)
+            models_to_return.append(step.build(collect_instances=instances))
 
-        for model_cls, objs in dependency_insert_order(instances_created):
+        for model_cls, objs in dependency_insert_order(instances, collect_instances=None):
             manager = cls._get_manager(model_cls)
             cls._refresh_database_pks(model_cls, objs)
 
