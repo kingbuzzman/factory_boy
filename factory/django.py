@@ -24,7 +24,7 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
-DJANGO_22 = Version(django_version) < Version('3.0')
+DJANGO_22 = django.VERSION < (3,)
 
 _LAZY_LOADS = {}
 
