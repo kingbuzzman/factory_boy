@@ -11,7 +11,6 @@ import os
 import warnings
 from collections import defaultdict
 
-from django import __version__ as django_version
 from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
 from django.db import IntegrityError, connections, models
