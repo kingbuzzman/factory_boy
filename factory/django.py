@@ -16,7 +16,6 @@ from django.contrib.auth.hashers import make_password
 from django.core import files as django_files
 from django.db import IntegrityError, connections, models
 from django.db.models.sql import InsertQuery
-from packaging.version import Version
 
 from . import base, builder, declarations, enums, errors
 
