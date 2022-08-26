@@ -22,8 +22,6 @@ logger = logging.getLogger('factory.generate')
 
 DEFAULT_DB_ALIAS = 'default'  # Same as django.db.DEFAULT_DB_ALIAS
 
-DJANGO_22 = django.VERSION < (3,)
-
 _LAZY_LOADS = {}
 
 
@@ -56,12 +54,11 @@ def connection_supports_bulk_insert(using):
 
     If any of these is `False`, the database does NOT support bulk_insert
     """
-    connection = connections[using]
-    if DJANGO_22:
-        can_return_rows_from_bulk_insert = connection.features.can_return_ids_from_bulk_insert
-    else:
-        can_return_rows_from_bulk_insert = connection.features.can_return_rows_from_bulk_insert
-    return connection.features.has_bulk_insert and can_return_rows_from_bulk_insert
+    db_features = connections[using].features
+    return (
+        db_features.has_bulk_insert
+        and db_features.can_return_rows_from_bulk_insert
+    )
 
 
 class DjangoOptions(base.FactoryOptions):
@@ -218,14 +215,6 @@ class DjangoModelFactory(base.Factory):
         # matter that it's the same obj reference. This is to bypass that pk
         # check and reset it.
         fields_to_reset = (GenericForeignKey, models.OneToOneField)
-        if DJANGO_22:
-            # Before Django 3.0, there is an issue when using bulk_insert.
-            #
-            # The issue is that if you create an instance of a model,
-            # and reference it in another unsaved instance of a model.
-            # When you create the instance of the first one, the pk/id
-            # is never updated on the sub model that referenced the first.
-            fields_to_reset += (models.fields.related.ForeignObject,)
 
         fields = [f for f in model_cls._meta.get_fields() if isinstance(f, fields_to_reset)]
         if not fields:
